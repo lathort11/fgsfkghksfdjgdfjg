@@ -2,14 +2,18 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, toSafeUser } from "@/lib/session";
+import { fetchBotProfile } from "@/lib/bot-webhook";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const user = await getCurrentUser();
-  return NextResponse.json({ user });
+  // Trial key, token usage and referrals live in the bot's database and are
+  // fetched through its Gateway. `bot` is null when unavailable.
+  const bot = user?.telegramId ? await fetchBotProfile(user.telegramId) : null;
+  return NextResponse.json({ user, bot });
 }
 
 export async function PATCH(req: Request) {
@@ -32,16 +36,17 @@ export async function PATCH(req: Request) {
       if (newPassword.length < 6) {
         return NextResponse.json({ error: "PASSWORD" }, { status: 400 });
       }
-      if (typeof currentPassword !== "string" || currentPassword.length === 0) {
-        return NextResponse.json({ error: "NEED_CURRENT" }, { status: 400 });
-      }
       const rows = await db
         .select({ passwordHash: users.passwordHash })
         .from(users)
         .where(eq(users.id, current.id))
         .limit(1);
       const stored = rows[0]?.passwordHash;
-      if (!stored || !verifyPassword(currentPassword, stored)) {
+      // Telegram-only accounts have no password yet and may set one directly.
+      if (stored && (typeof currentPassword !== "string" || currentPassword.length === 0)) {
+        return NextResponse.json({ error: "NEED_CURRENT" }, { status: 400 });
+      }
+      if (stored && !verifyPassword(currentPassword, stored)) {
         return NextResponse.json({ error: "WRONG_PASSWORD" }, { status: 403 });
       }
       updates.passwordHash = hashPassword(newPassword);
@@ -55,16 +60,11 @@ export async function PATCH(req: Request) {
       .update(users)
       .set(updates)
       .where(eq(users.id, current.id))
-      .returning({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        createdAt: users.createdAt,
-      });
+      .returning();
 
     return NextResponse.json({
       ok: true,
-      user: { ...updated, createdAt: updated.createdAt.toISOString() },
+      user: toSafeUser(updated),
     });
   } catch {
     return NextResponse.json({ error: "SERVER" }, { status: 500 });

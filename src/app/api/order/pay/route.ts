@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { payOrder } from "@/lib/livka";
+import { deliverOrderToTelegram } from "@/lib/order-delivery";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -13,8 +14,17 @@ export async function POST(req: Request) {
     }
 
     const row = await payOrder({ userId: user.id, secret, txHash });
+
+    // Status just moved to `delivered` → duplicate receipt + credentials into
+    // the buyer's Telegram chat so they survive a closed browser tab.
+    let sentToTelegram = false;
+    if (row.justDelivered && user.telegramId) {
+      sentToTelegram = await deliverOrderToTelegram(row, user.telegramId);
+    }
+
     return NextResponse.json({
       ok: true,
+      sentToTelegram,
       order: {
         orderNo: row.order.orderNo,
         secret: row.order.secret,

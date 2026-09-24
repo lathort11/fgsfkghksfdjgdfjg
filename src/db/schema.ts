@@ -9,17 +9,26 @@ export const orderStatusEnum = pgEnum("order_status", [
   "cancelled",
 ]);
 
-export const users = pgTable("users", {
+/*
+ * Site tables use the explicit `site_` prefix so they never collide with the
+ * bot's own tables (`users`, …managed by Alembic) in the shared `livkamarket`
+ * PostgreSQL database.
+ */
+export const users = pgTable("site_users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  // Nullable: users who signed in only through Telegram have no password.
+  passwordHash: text("password_hash"),
   name: text("name").notNull(),
+  telegramId: text("telegram_id").unique(),
+  telegramUsername: text("telegram_username"),
+  avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const sessions = pgTable("sessions", {
+export const sessions = pgTable("site_sessions", {
   token: text("token").primaryKey(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

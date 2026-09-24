@@ -1,0 +1,53 @@
+# LIVKAMARKET — site service for the VPS docker-compose stack.
+# Merge these services into the existing compose file next to the bot,
+# PostgreSQL and Caddy (they must share the `livka` network).
+#
+#   docker compose run --rm site-migrate     # once per release, before `up`
+#   docker compose up -d --build site
+
+services:
+  site:
+    build:
+      context: ../            # path to the LIVKAMARKET-site repository
+      target: runner
+      args:
+        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LivkaMarketbot}
+    container_name: livkamarket-site
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-livka}:${POSTGRES_PASSWORD}@postgres:5432/livkamarket
+      # Server-to-server calls to the bot Gateway go over the internal network.
+      BOT_GATEWAY_URL: ${BOT_GATEWAY_URL:-http://bot:8080}
+      BOT_INTERNAL_SECRET: ${BOT_INTERNAL_SECRET}
+      # Optional: validate Telegram signatures locally instead of via the Gateway.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      # Browser → bot backend for /miniapp IP verification. Empty = same origin.
+      MINIAPP_BACKEND_URL: ${MINIAPP_BACKEND_URL:-https://api.livkamarket.app}
+      CRYPTO_USDT_TRC20: ${CRYPTO_USDT_TRC20:-}
+      CRYPTO_TON: ${CRYPTO_TON:-}
+      CRYPTO_BTC: ${CRYPTO_BTC:-}
+      CRYPTO_ETH: ${CRYPTO_ETH:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "3000"
+    networks: [livka]
+    mem_limit: 256m
+
+  site-migrate:
+    build:
+      context: ../
+      target: migrator
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-livka}:${POSTGRES_PASSWORD}@postgres:5432/livkamarket
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [livka]
+    profiles: [tools]
+    restart: "no"
+
+networks:
+  livka:
+    external: true

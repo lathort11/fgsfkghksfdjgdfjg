@@ -218,7 +218,7 @@ export async function payOrder(input: {
   const row = rows[0];
   if (!row) throw new Error("ORDER_NOT_FOUND");
   if (!input.userId || row.order.userId !== input.userId) throw new Error("ORDER_NOT_FOUND");
-  if (row.order.status === "delivered") return row;
+  if (row.order.status === "delivered") return { ...row, justDelivered: false };
 
   const credentials = makeCredentials(row.product.kind, row.product.slug);
 
@@ -248,7 +248,7 @@ export async function payOrder(input: {
     .where(eq(orders.id, row.order.id))
     .limit(1);
 
-  return updated[0] ?? row;
+  return { ...(updated[0] ?? row), justDelivered: true };
 }
 
 export async function getOrderBySecret(secret: string) {
@@ -268,4 +268,9 @@ export async function getUserOrders(userId: string) {
     .innerJoin(products, eq(orders.productId, products.id))
     .where(eq(orders.userId, userId))
     .orderBy(desc(orders.createdAt));
+}
+
+/** Bind an anonymous / foreign order to a site user (used by the bot's /claim). */
+export async function assignOrderToUser(orderId: string, userId: string) {
+  await db.update(orders).set({ userId, updatedAt: new Date() }).where(eq(orders.id, orderId));
 }

@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
+import { MiniAppMarket, type MiniBotProfile, type MiniNetwork, type MiniProduct, type MiniUser } from "@/components/livka/miniapp-market";
 import { useI18n } from "@/components/livka/i18n-context";
 import { Check, Clock, Globe, KeyIcon, LivkaMark, Lock, Shield, Telegram, UserIcon, XIcon } from "@/components/livka/icons";
 import { buildVerifyUrl, verifyIp, type VerifyResult, type VerifyState } from "@/lib/miniapp";
@@ -26,7 +27,10 @@ type TelegramWebApp = {
   isVersionAtLeast?: (version: string) => boolean;
   setBackgroundColor?: (color: string) => void;
   setHeaderColor?: (color: string) => void;
-  HapticFeedback?: { notificationOccurred: (type: "error" | "success" | "warning") => void };
+  HapticFeedback?: {
+    notificationOccurred: (type: "error" | "success" | "warning") => void;
+    impactOccurred?: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+  };
 };
 
 declare global {
@@ -73,12 +77,16 @@ function attempt(fn: () => void) {
   }
 }
 
-export default function MiniAppVerify({
+type SdkState = "loading" | "ready" | "failed";
+
+export function MiniAppVerify({
   backendBase,
   configError,
+  sdk,
 }: {
   backendBase: string;
   configError: boolean;
+  sdk: SdkState;
 }) {
   const { t } = useI18n();
   const [view, setView] = useState<View>("loading");
@@ -163,7 +171,10 @@ export default function MiniAppVerify({
   const boot = useCallback(() => {
     if (booted.current) return;
     const tg = getWebApp();
-    if (!tg) return;
+    if (!tg) {
+      setView("no_telegram");
+      return;
+    }
     booted.current = true;
     setHasWebApp(true);
 
@@ -176,12 +187,10 @@ export default function MiniAppVerify({
   }, [verify]);
 
   useEffect(() => {
-    // If the SDK never arrives (blocked, offline), stop the spinner and say why.
-    const id = window.setTimeout(() => {
-      if (!booted.current) setView("no_telegram");
-    }, SDK_TIMEOUT_MS);
-    return () => window.clearTimeout(id);
-  }, []);
+    // The shell loads the SDK once; start as soon as it is there.
+    if (sdk === "ready") boot();
+    else if (sdk === "failed" && !booted.current) setView("no_telegram");
+  }, [sdk, boot]);
 
   const retry = () => {
     if (view === "no_telegram") {
@@ -202,15 +211,6 @@ export default function MiniAppVerify({
 
   return (
     <>
-      <Script
-        src={TELEGRAM_SDK_SRC}
-        strategy="afterInteractive"
-        onReady={boot}
-        onError={() => {
-          if (!booted.current) setView("no_telegram");
-        }}
-      />
-
       <main className="flex min-h-[100dvh] items-center justify-center px-5 py-10">
         <section className="glass w-full max-w-sm p-7 text-center" aria-labelledby="miniapp-title">
           <div
@@ -303,6 +303,135 @@ export default function MiniAppVerify({
           </p>
         </section>
       </main>
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Mini App 2.0 shell: loads the Telegram SDK once and picks the mode.
+ *   ?mode=verify → IP verification (onboarding step)
+ *   ?mode=market → cabinet + catalog (bot main menu "🛍️ LIVKAMARKET")
+ *   no param     → market for already verified users, verification otherwise
+ * ═══════════════════════════════════════════════════════════════════════ */
+export type MiniAppMode = "verify" | "market" | "auto";
+type Route = "boot" | "verify" | "market" | "auth_error";
+
+const SHELL_COPY = {
+  ru: { loading: "Загрузка LIVKAMARKET…", authT: "Не удалось войти", authD: "Не получилось подтвердить ваш Telegram-аккаунт. Откройте приложение заново из бота.", retry: "Повторить" },
+  en: { loading: "Loading LIVKAMARKET…", authT: "Sign-in failed", authD: "We could not verify your Telegram account. Reopen the app from the bot.", retry: "Try again" },
+  zh: { loading: "正在加载 LIVKAMARKET…", authT: "登录失败", authD: "无法验证您的 Telegram 账户，请从机器人重新打开。", retry: "重试" },
+} as const;
+
+export default function MiniApp({
+  backendBase,
+  configError,
+  mode,
+  products,
+  networks,
+}: {
+  backendBase: string;
+  configError: boolean;
+  mode: MiniAppMode;
+  products: MiniProduct[];
+  networks: MiniNetwork[];
+}) {
+  const { locale } = useI18n();
+  const sc = SHELL_COPY[locale as keyof typeof SHELL_COPY] ?? SHELL_COPY.ru;
+  const [sdk, setSdk] = useState<SdkState>("loading");
+  const [route, setRoute] = useState<Route>(mode === "verify" ? "verify" : "boot");
+  const [session, setSession] = useState<{ user: MiniUser; bot: MiniBotProfile | null } | null>(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setSdk((s) => (s === "loading" ? "failed" : s)), SDK_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  const haptic = useCallback((kind: "success" | "error" | "warning" | "light") => {
+    const tg = getWebApp();
+    if (!tg || !supports(tg, "6.1")) return;
+    attempt(() =>
+      kind === "light" ? tg.HapticFeedback?.impactOccurred?.("light") : tg.HapticFeedback?.notificationOccurred(kind)
+    );
+  }, []);
+
+  const authenticate = useCallback(async () => {
+    const tg = getWebApp();
+    const initData = tg && typeof tg.initData === "string" ? tg.initData : "";
+    // Outside Telegram / without initData the verify screen explains what to do.
+    if (!tg || !initData) {
+      setRoute("verify");
+      return;
+    }
+    attempt(() => tg.ready());
+    attempt(() => tg.expand());
+    if (supports(tg, "6.1")) attempt(() => tg.setBackgroundColor?.(APP_BG));
+    if (supports(tg, "6.9")) attempt(() => tg.setHeaderColor?.(APP_BG));
+
+    setRoute("boot");
+    try {
+      const res = await fetch("/api/auth/telegram/webapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ initData }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.user) {
+        // Auto mode keeps the old behaviour: fall back to IP verification.
+        setRoute(mode === "market" ? "auth_error" : "verify");
+        return;
+      }
+      setSession({ user: data.user as MiniUser, bot: (data.bot ?? null) as MiniBotProfile | null });
+      if (mode === "market") setRoute("market");
+      else setRoute(data.bot?.ipVerified === true ? "market" : "verify");
+    } catch {
+      setRoute(mode === "market" ? "auth_error" : "verify");
+    }
+  }, [mode]);
+
+  const onSdkReady = useCallback(() => {
+    setSdk("ready");
+    if (started.current || mode === "verify") return;
+    started.current = true;
+    void authenticate();
+  }, [mode, authenticate]);
+
+  // SDK never loaded → the verify screen explains how to open the app.
+  const view: Route = sdk === "failed" && route === "boot" ? "verify" : route;
+
+  return (
+    <>
+      <Script
+        src={TELEGRAM_SDK_SRC}
+        strategy="afterInteractive"
+        onReady={onSdkReady}
+        onError={() => setSdk("failed")}
+      />
+      {view === "verify" && <MiniAppVerify backendBase={backendBase} configError={configError} sdk={sdk} />}
+      {view === "market" && session && (
+        <MiniAppMarket user={session.user} bot={session.bot} products={products} networks={networks} haptic={haptic} />
+      )}
+      {view === "boot" && (
+        <main className="flex min-h-[100dvh] flex-col items-center justify-center gap-4">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-white" aria-hidden="true" />
+          <span className="text-[13px]" style={{ color: "var(--ink-3)" }}>{sc.loading}</span>
+        </main>
+      )}
+      {view === "auth_error" && (
+        <main className="flex min-h-[100dvh] items-center justify-center px-5">
+          <section className="glass w-full max-w-sm p-7 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: "rgba(231,194,122,.12)", color: "#e7c27a" }}>
+              <KeyIcon className="h-7 w-7" />
+            </div>
+            <h1 className="ff-d mt-6 text-xl text-white">{sc.authT}</h1>
+            <p className="mt-3 text-[14px]" style={{ color: "var(--ink-2)" }}>{sc.authD}</p>
+            <button type="button" onClick={() => void authenticate()} className="btn btn-primary mt-7 w-full !py-3.5 text-sm">
+              {sc.retry}
+            </button>
+          </section>
+        </main>
+      )}
     </>
   );
 }

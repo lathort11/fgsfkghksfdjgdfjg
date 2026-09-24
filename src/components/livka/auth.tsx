@@ -2,9 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
+import { TelegramLoginButton } from "@/components/livka/telegram-login";
 import { Sparkle, XIcon, LogOut, Receipt, UserIcon, Lock, Check } from "@/components/livka/icons";
 
-export type SessionUser = { id: string; email: string; name: string; createdAt?: string };
+export type SessionUser = {
+  id: string;
+  email: string;
+  name: string;
+  createdAt?: string;
+  telegramId?: string | null;
+  telegramUsername?: string | null;
+  avatarUrl?: string | null;
+  hasPassword?: boolean;
+};
 
 const inputStyle = {
   background: "rgba(255,255,255,.04)",
@@ -171,6 +181,11 @@ export function AuthModal({
             </button>
           ))}
         </div>
+
+        <TelegramLoginButton
+          onSuccess={(u) => onSuccess(u)}
+          onError={(msg) => setError(msg)}
+        />
 
         <form onSubmit={submit} className="space-y-4">
           {tab === "register" && (

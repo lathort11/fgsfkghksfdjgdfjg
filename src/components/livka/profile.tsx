@@ -1,5 +1,7 @@
 "use client";
 
+import type { SessionUser } from "@/components/livka/auth";
+
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
 import { DICTS } from "@/lib/i18n";
@@ -37,10 +39,10 @@ export function ProfileModal({
 }: {
   open: boolean;
   onClose: () => void;
-  user: { id: string; email: string; name: string; createdAt?: string };
+  user: SessionUser;
   onOrders: () => void;
   onLogout: () => void;
-  onUserUpdate: (u: { id: string; email: string; name: string; createdAt?: string }) => void;
+  onUserUpdate: (u: SessionUser) => void;
 }) {
   const { t, locale } = useI18n();
   const [rows, setRows] = useState<MineOrder[] | null>(null);
@@ -180,7 +182,12 @@ export function ProfileModal({
               fontWeight: 900,
             }}
           >
-            {user.name.trim().charAt(0).toUpperCase() || "U"}
+            {user.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatarUrl} alt="" className="w-full h-full rounded-[22px] object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              user.name.trim().charAt(0).toUpperCase() || "U"
+            )}
           </span>
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--ink-3)" }}>
@@ -190,7 +197,9 @@ export function ProfileModal({
               {user.name}
             </div>
             <div className="text-[11px] truncate mt-0.5" style={{ color: "var(--ink-3)" }}>
-              {user.email}
+              {user.telegramId
+                ? `Telegram${user.telegramUsername ? ` · @${user.telegramUsername}` : ` · ID ${user.telegramId}`}`
+                : user.email}
             </div>
             {user.createdAt && (
               <div className="text-[10px] mt-1" style={{ color: "var(--ink-3)" }}>

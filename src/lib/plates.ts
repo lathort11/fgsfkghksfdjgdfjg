@@ -1,13 +1,13 @@
 /** Real studio photographs, not generated images. Pexels license. */
 export const PLATES: Record<string, string> = {
-  "gemini-pro-18": "/images/gemini.jpg",
-  "chatgpt-pro": "/images/chatgpt.jpg",
-  supergrok: "/images/grok.jpg",
-  "antigravity-api": "/images/api.jpg",
+  "gemini-pro-18": "/gemini.png",
+  "chatgpt-pro": "/chatgpt.png",
+  supergrok: "/grok.png",
+  "antigravity-api": "/api.png",
 };
 
 export function plateFor(slug: string) {
-  return PLATES[slug] ?? "/images/gemini.jpg";
+  return PLATES[slug] ?? "/gemini.png";
 }
 
 export function plateFocus(_slug: string) {

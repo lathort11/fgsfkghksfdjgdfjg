@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { hashPassword, isEmail, normalizeEmail } from "@/lib/auth";
-import { createSession } from "@/lib/session";
+import { createSession, toSafeUser } from "@/lib/session";
 
 export async function POST(req: Request) {
   try {
@@ -35,17 +35,12 @@ export async function POST(req: Request) {
     const [user] = await db
       .insert(users)
       .values({ name: cleanName, email: cleanEmail, passwordHash: hashPassword(cleanPass) })
-      .returning({
-        id: users.id,
-        email: users.email,
-        name: users.name,
-        createdAt: users.createdAt,
-      });
+      .returning();
 
     await createSession(user.id);
     return NextResponse.json({
       ok: true,
-      user: { ...user, createdAt: user.createdAt.toISOString() },
+      user: toSafeUser(user),
     });
   } catch {
     return NextResponse.json({ error: "SERVER" }, { status: 500 });

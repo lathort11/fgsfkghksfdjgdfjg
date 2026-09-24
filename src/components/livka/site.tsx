@@ -138,12 +138,7 @@ function Navbar({
 
       <nav className="max-w-7xl mx-auto flex items-center justify-between gap-3 h-[64px] px-3 sm:px-6 lg:px-8">
         <a href="#top" className="flex items-center gap-2.5 group shrink-0">
-          <span
-            className="flex items-center justify-center w-9 h-9 rounded-2xl"
-            style={{ background: "#17171c", border: "1px solid var(--line-2)" }}
-          >
-            <LivkaMark className="w-[18px] h-[18px]" />
-          </span>
+          <img src="/logo.svg" alt="LIVKAMARKET" className="w-9 h-9 rounded-xl" />
           <span className="ff-d text-[13px] sm:text-base text-white" style={{ fontWeight: 800 }}>
             LIVKA<span className="grad-main">MARKET</span>
           </span>
@@ -1147,12 +1142,7 @@ function Footer() {
         <div className="grid md:grid-cols-[1.3fr_0.8fr_0.9fr] gap-9 pb-12">
           <div>
             <a href="#top" className="flex items-center gap-2.5">
-              <span
-                className="flex items-center justify-center w-10 h-10 rounded-2xl"
-                style={{ background: "#17171c", border: "1px solid var(--line-2)" }}
-              >
-                <Sparkle className="w-5 h-5 text-white" />
-              </span>
+              <img src="/logo.svg" alt="LIVKAMARKET" className="w-10 h-10 rounded-xl" />
               <span className="ff-d text-base text-white" style={{ fontWeight: 800 }}>
                 LIVKA<span className="grad-main">MARKET</span>
               </span>

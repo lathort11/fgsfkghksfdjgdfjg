@@ -29,12 +29,8 @@ export const metadata: Metadata = {
   description:
     "Премиальный доступ к топовым нейросетям. Автоматическая выдача за 2 минуты, оплата криптой (USDT, TON, BTC), гарантия замены на весь срок 18 месяцев.",
   icons: {
-    icon: [
-      {
-        url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%237c5cff'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='10' fill='%2304040a'/%3E%3Crect width='32' height='32' rx='10' fill='url(%23g)' opacity='0.25'/%3E%3Cpath d='M16 4 C17.4 10.6 19.4 12.6 26 14 C19.4 15.4 17.4 17.4 16 24 C14.6 17.4 12.6 15.4 6 14 C12.6 12.6 14.6 10.6 16 4 Z' fill='url(%23g)'/%3E%3C/svg%3E",
-        type: "image/svg+xml",
-      },
-    ],
+    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
+    apple: "/logo.svg",
   },
 };
 

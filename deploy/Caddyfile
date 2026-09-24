@@ -1,0 +1,33 @@
+# LIVKAMARKET — Caddy (automatic HTTPS via Let's Encrypt).
+
+livkamarket.app, www.livkamarket.app {
+	encode zstd gzip
+
+	# The IP check must reach the bot directly so it sees the real client IP.
+	handle /miniapp/api/* {
+		reverse_proxy bot:8080 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		reverse_proxy site:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		# No X-Frame-Options here: framing rules come from the app's CSP
+		# (frame-ancestors allows Telegram for /miniapp only).
+		-X-Frame-Options
+		-Server
+	}
+}
+
+api.livkamarket.app {
+	encode zstd gzip
+	reverse_proxy bot:8080 {
+		header_up X-Real-IP {remote_host}
+	}
+}
