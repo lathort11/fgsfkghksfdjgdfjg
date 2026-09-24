@@ -10,7 +10,7 @@ import { deliverOrderToTelegram, productTitle } from "@/lib/order-delivery";
 export const dynamic = "force-dynamic";
 
 function authorized(req: Request): boolean {
-  const expected = process.env.BOT_INTERNAL_SECRET ?? "";
+  const expected = process.env.BOT_INTERNAL_SECRET ?? process.env.INTERNAL_SECRET ?? "";
   const got = req.headers.get("x-internal-secret") ?? "";
   if (!expected || got.length !== expected.length) return false;
   return timingSafeEqual(Buffer.from(got), Buffer.from(expected));
