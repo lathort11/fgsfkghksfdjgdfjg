@@ -10,8 +10,6 @@ services:
     build:
       context: ../            # path to the LIVKAMARKET-site repository
       target: runner
-      args:
-        NEXT_PUBLIC_TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LivkaMarketbot}
     container_name: livkamarket-site
     restart: unless-stopped
     environment:
@@ -19,6 +17,8 @@ services:
       # Server-to-server calls to the bot Gateway go over the internal network.
       BOT_GATEWAY_URL: ${BOT_GATEWAY_URL:-http://bot:8080}
       BOT_INTERNAL_SECRET: ${BOT_INTERNAL_SECRET}
+      # Login Widget bot; its domain must be livkamarket.app (@BotFather → /setdomain).
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-LivkaMarketbot}
       # Optional: validate Telegram signatures locally instead of via the Gateway.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       # Browser → bot backend for /miniapp IP verification. Empty = same origin.

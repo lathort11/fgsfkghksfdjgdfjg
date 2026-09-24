@@ -9,9 +9,9 @@ import { CheckoutModal, ICONS, MyOrdersModal, fmtRub, hexA } from "@/components/
 import { ProfileModal } from "@/components/livka/profile";
 import type { ProductRow } from "@/db/schema";
 import { LOCALES, type Locale } from "@/lib/i18n";
-import { plateFor, plateFocus } from "@/lib/plates";
+import { ProductArt, ProductTile, accentVars } from "@/components/livka/product-art";
 import {
-  ArrowRight, ArrowUpRight, Check, ChevronDown, Clock, GeminiMark,
+  ArrowRight, ArrowUpRight, Check, ChevronDown, Clock,
   Headset, MenuIcon, Receipt, Search, Shield,
   Sparkle, Star, Telegram, UserIcon, Wallet, XIcon, Zap, Globe, LivkaMark,
 } from "@/components/livka/icons";
@@ -271,19 +271,36 @@ function Navbar({
 }
 
 /* ═══════════════ HERO ═══════════════ */
-function Hero({ products }: { products: ProductRow[] }) {
+/** Autoplay step. NN/g-style guidance: 5–7 s per slide, pause on hover/focus. */
+const HERO_SLIDE_MS = 6000;
+
+function Hero({ products, onBuy }: { products: ProductRow[]; onBuy: (p: ProductRow) => void }) {
   const { t } = useI18n();
   const [idx, setIdx] = useState(0);
+  // A manual pick stops autoplay for good; hover / focus only holds it.
   const [paused, setPaused] = useState(false);
+  const [hold, setHold] = useState(false);
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  useEffect(() => {
-    if (paused || products.length < 2) return;
-    const id = setInterval(() => setIdx((v) => v + 1), 4600);
-    return () => clearInterval(id);
-  }, [paused, products.length]);
-
-  const active = products.length ? products[idx % products.length] : null;
+  const n = products.length;
+  const cur = n ? idx % n : 0;
+  const active = n ? products[cur] : null;
   const activeCopy = active ? t.products[active.slug as keyof typeof t.products] : null;
+
+  const select = (i: number, focus = false) => {
+    if (!n) return;
+    const next = ((i % n) + n) % n;
+    setIdx(next);
+    setPaused(true);
+    if (focus) tabs.current[next]?.focus();
+  };
+
+  const onTabsKey = (e: React.KeyboardEvent) => {
+    const map: Record<string, number> = { ArrowRight: cur + 1, ArrowDown: cur + 1, ArrowLeft: cur - 1, ArrowUp: cur - 1, Home: 0, End: n - 1 };
+    if (!(e.key in map)) return;
+    e.preventDefault();
+    select(map[e.key], true);
+  };
 
   return (
     <section id="top" className="relative flex items-center pt-32 sm:pt-36 pb-16 lg:min-h-screen lg:pb-24 overflow-hidden">
@@ -344,41 +361,90 @@ function Hero({ products }: { products: ProductRow[] }) {
           </Reveal>
         </div>
 
-        <div className="relative">
+        <div
+          className="relative"
+          onMouseEnter={() => setHold(true)}
+          onMouseLeave={() => setHold(false)}
+          onFocus={() => setHold(true)}
+          onBlur={() => setHold(false)}
+        >
           {active && (
-            <a href="#catalog" className="stage block" key={active.slug}>
-              <img src={plateFor(active.slug)} alt={activeCopy?.name ?? ""} style={{ objectPosition: plateFocus(active.slug) }} />
-              <div className="stage-veil" />
-              <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-4 p-5 sm:p-6">
-                <div className="min-w-0">
-                  <div className="ff-d truncate text-[15px] font-bold text-white">{activeCopy?.name}</div>
-                  <div className="truncate text-[12px] text-white/70">{activeCopy?.tagline}</div>
+            <div className="hero-card" id="hero-showcase" role="tabpanel" aria-label={activeCopy?.name}>
+              <ProductArt key={active.slug} product={active} tile={116} className="hero-art swap-in">
+                <div className="art-top">
+                  <span className="art-chip">{activeCopy?.badge}</span>
+                  <span className="art-chip art-chip-soft">
+                    <span className="art-dot" />
+                    {t.hero.inStock}
+                  </span>
                 </div>
-                <div className="shrink-0 text-right">
-                  <div className="ff-d text-2xl font-black text-white">{fmtRub(active.priceCents)}</div>
-                  <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-white/55">{t.hero.inStock}</div>
+              </ProductArt>
+
+              <div key={`${active.slug}-copy`} className="swap-in px-4 pt-5">
+                <div className="ff-d truncate text-lg text-white sm:text-xl" style={{ fontWeight: 700 }}>
+                  {activeCopy?.name}
+                </div>
+                <div className="mt-1 truncate text-[13px]" style={{ color: "var(--ink-2)" }}>
+                  {activeCopy?.tagline}
                 </div>
               </div>
-            </a>
+
+              <div
+                className="mt-5 flex items-center justify-between gap-4 border-t pt-2"
+                style={{ borderColor: "var(--line)", ...accentVars(active.accent) }}
+              >
+                <div key={`${active.slug}-price`} className="swap-in min-w-0 pl-4">
+                  <div className="ff-d text-2xl leading-none text-white" style={{ fontWeight: 800 }}>
+                    {fmtRub(active.priceCents)}
+                  </div>
+                  <div className="mt-1.5 truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
+                    {t.per[active.per as keyof typeof t.per]}
+                  </div>
+                </div>
+                <button type="button" onClick={() => onBuy(active)} className="btn btn-ink shrink-0 !px-6 !py-3.5 text-sm">
+                  {t.catalog.buy}
+                  <ArrowUpRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           )}
 
-          <div className="mt-3 grid grid-cols-4 gap-2">
+          <div
+            role="tablist"
+            aria-label={t.catalog.chip}
+            onKeyDown={onTabsKey}
+            className="mt-3 grid grid-cols-4 gap-2"
+          >
             {products.map((p, i) => {
-              const on = !!active && p.id === active.id;
+              const on = i === cur;
               const name = t.products[p.slug as keyof typeof t.products]?.name ?? p.slug;
               return (
                 <button
                   key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setIdx(i);
-                    setPaused(true);
+                  ref={(el) => {
+                    tabs.current[i] = el;
                   }}
-                  className={`stage-thumb ${on ? "is-on" : ""}`}
-                  aria-label={name}
-                  aria-pressed={on}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  aria-controls="hero-showcase"
+                  tabIndex={on ? 0 : -1}
+                  title={name}
+                  onClick={() => select(i)}
+                  className={`hero-tab ${on ? "is-on" : ""}`}
+                  style={accentVars(p.accent)}
                 >
-                  <img src={plateFor(p.slug)} alt="" />
+                  <ProductTile product={p} size={28} />
+                  <span className="truncate">{name.split(" · ")[0]}</span>
+                  {on && !paused && n > 1 && (
+                    <span
+                      key={idx}
+                      className="hero-tab-bar"
+                      style={{ animationDuration: `${HERO_SLIDE_MS}ms`, animationPlayState: hold ? "paused" : "running" }}
+                      onAnimationEnd={() => setIdx((v) => v + 1)}
+                      aria-hidden="true"
+                    />
+                  )}
                 </button>
               );
             })}
@@ -509,61 +575,65 @@ function Catalog({
           </Reveal>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-5 lg:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
           {filtered.map((p, i) => {
             const pd = t.products[p.slug as keyof typeof t.products];
             if (!pd) return null;
             const accent = p.accent;
             const low = p.stock <= 15;
             return (
-              <Reveal key={p.id} delay={i * 70}>
-                <article className="pcard flex h-full flex-col overflow-hidden">
-                  <div className="plate aspect-[16/10]">
-                    <img src={plateFor(p.slug)} alt={pd.name} style={{ objectPosition: plateFocus(p.slug) }} />
-                  </div>
-
-                  <div className="flex flex-1 flex-col p-5 sm:p-6">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: accent }}>
-                      {pd.badge}
+              <Reveal key={p.id} delay={i * 70} className="h-full">
+                <article className="pcard flex h-full flex-col" style={accentVars(accent)}>
+                  <ProductArt product={p} tile={84} className="pcard-art">
+                    <div className="art-top">
+                      <span className="art-chip">{pd.badge}</span>
+                      <span className="art-chip art-chip-soft">
+                        <span className={`art-dot ${low ? "is-low" : ""}`} />
+                        {t.catalog.left} {p.stock} {t.catalog.pieces}
+                      </span>
                     </div>
-                    <h3 className="ff-d mt-2 text-xl text-white" style={{ fontWeight: 700 }}>
+                  </ProductArt>
+
+                  <div className="flex flex-1 flex-col px-6 pt-6">
+                    <h3 className="ff-d text-xl text-white" style={{ fontWeight: 700 }}>
                       {pd.name}
                     </h3>
-                    <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
-                      {pd.description}
+                    <p className="mt-1.5 text-[13px]" style={{ color: "var(--ink-2)" }}>
+                      {pd.tagline}
                     </p>
-
-                    <div className="mt-5 flex items-baseline gap-2">
-                      <span className="ff-d text-3xl text-white" style={{ fontWeight: 800 }}>
-                        {fmtRub(p.priceCents)}
-                      </span>
-                      <span className="text-[12px]" style={{ color: "var(--ink-3)" }}>
-                        {t.per[p.per as keyof typeof t.per]}
-                      </span>
-                    </div>
-
-                    <ul className="mt-4 flex-1 space-y-2">
+                    <ul className="mt-5 flex-1 space-y-2.5">
                       {pd.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2.5 text-[13px]" style={{ color: "var(--ink-2)" }}>
-                          <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: accent }} />
+                        <li key={f} className="flex items-start gap-2.5 text-[13px] leading-snug" style={{ color: "var(--ink-2)" }}>
+                          <Check className="mt-px h-4 w-4 shrink-0" style={{ color: accent }} />
                           {f}
                         </li>
                       ))}
                     </ul>
+                  </div>
 
-                    <div className="mt-5 flex items-center justify-between text-[11px]" style={{ color: "var(--ink-3)" }}>
-                      <span>
-                        {p.soldCount.toLocaleString("ru-RU")} {t.catalog.sold}
-                      </span>
-                      <span style={{ color: low ? "#e7c27a" : "var(--ink-3)" }}>
-                        {t.catalog.left} {p.stock} {t.catalog.pieces}
-                      </span>
+                  <div
+                    className="mx-2 mb-2 mt-6 flex items-center justify-between gap-4 border-t pt-2"
+                    style={{ borderColor: "var(--line)" }}
+                  >
+                    <div className="min-w-0 pl-4">
+                      <div className="ff-d text-[26px] leading-none text-white" style={{ fontWeight: 800 }}>
+                        {fmtRub(p.priceCents)}
+                      </div>
+                      <div
+                        className="mt-1.5 flex flex-col gap-0.5 text-[11px] lg:flex-row lg:gap-1.5"
+                        style={{ color: "var(--ink-3)" }}
+                      >
+                        <span className="whitespace-nowrap">{t.per[p.per as keyof typeof t.per]}</span>
+                        <span className="hidden lg:inline" aria-hidden="true">·</span>
+                        <span className="whitespace-nowrap">
+                          {p.soldCount.toLocaleString("ru-RU")} {t.catalog.sold}
+                        </span>
+                      </div>
                     </div>
-
                     <button
+                      type="button"
                       onClick={() => onBuy(p)}
-                      className="btn mt-5 w-full !py-3.5 text-sm text-white"
-                      style={{ background: accent }}
+                      className="btn btn-ink shrink-0 !rounded-[20px] !px-6 !py-3.5 text-sm"
                     >
                       {t.catalog.buy}
                       <ArrowUpRight className="h-4 w-4" />
@@ -623,20 +693,11 @@ function Compare({ products, onBuy }: { products: ProductRow[]; onBuy: (p: Produ
                     </th>
                     {cols.map((slug, i) => {
                       const p = products.find((x) => x.slug === slug);
-                      const Icon = p ? ICONS[p.icon as keyof typeof ICONS] : GeminiMark;
                       const accent = p?.accent ?? "#7c5cff";
                       return (
                         <th key={slug} className="p-4">
                           <div className="flex flex-col items-center gap-2">
-                            <span className="relative h-12 w-16 overflow-hidden rounded-xl">
-                              <img src={plateFor(slug)} alt="" className="h-full w-full object-cover" />
-                              <span
-                                className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-md bg-black/55"
-                                style={{ color: accent }}
-                              >
-                                <Icon className="h-3 w-3" />
-                              </span>
-                            </span>
+                            {p && <ProductTile product={p} size={44} />}
                             <span className="ff-d text-[11px] sm:text-xs text-white text-center" style={{ fontWeight: 700 }}>
                               {t.compare.head[colKeys[i]]}
                             </span>
@@ -1331,7 +1392,7 @@ export default function Site({
           setTrackOpen(true);
         }}
       />
-      <Hero products={products} />
+      <Hero products={products} onBuy={handleBuy} />
       <Catalog products={products} onBuy={handleBuy} />
       <How />
       <Faq />

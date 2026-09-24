@@ -1,6 +1,12 @@
 # LIVKAMARKET — Caddy (automatic HTTPS via Let's Encrypt).
 
-livkamarket.app, www.livkamarket.app {
+# Telegram Login works only on the exact domain linked in @BotFather
+# (/setdomain livkamarket.app) — www.* would show "Bot domain invalid".
+www.livkamarket.app {
+	redir https://livkamarket.app{uri} permanent
+}
+
+livkamarket.app {
 	encode zstd gzip
 
 	# The IP check must reach the bot directly so it sees the real client IP.

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
-import { TelegramLoginButton } from "@/components/livka/telegram-login";
+import { TelegramLoginButton, prefetchTelegramLogin } from "@/components/livka/telegram-login";
 import { Sparkle, XIcon, LogOut, Receipt, UserIcon, Lock, Check } from "@/components/livka/icons";
 
 export type SessionUser = {
@@ -54,6 +54,12 @@ export function AuthModal({
       document.documentElement.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    // Warm the Telegram domain check so the modal opens without a layout jump.
+    const id = window.setTimeout(() => void prefetchTelegramLogin(), 1500);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

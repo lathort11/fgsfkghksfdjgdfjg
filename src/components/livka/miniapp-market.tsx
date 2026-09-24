@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
 import { Check, KeyIcon, Receipt, Sparkle, UserIcon, Wallet, XIcon } from "@/components/livka/icons";
 import { fmtRub } from "@/components/livka/checkout";
-import { plateFor } from "@/lib/plates";
+import { ProductTile } from "@/components/livka/product-art";
 
 /* ═══════════ Types shared with the Mini App shell ═══════════ */
 export type MiniUser = {
@@ -23,7 +23,7 @@ export type MiniBotProfile = {
   referralsConfirmed: number;
   referralsRequired: number;
 };
-export type MiniProduct = { id: string; slug: string; priceCents: number; per: string; kind: string; stock: number };
+export type MiniProduct = { id: string; slug: string; priceCents: number; per: string; kind: string; stock: number; icon: string; accent: string };
 export type MiniNetwork = { id: string; asset: string; net: string };
 
 type Haptic = (kind: "success" | "error" | "warning" | "light") => void;
@@ -204,10 +204,7 @@ export function MiniAppMarket({
           const out = p.stock <= 0;
           return (
             <div key={p.id} className="flex items-center gap-3 rounded-2xl p-3" style={card}>
-              <span className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black p-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={plateFor(p.slug)} alt="" className="h-full w-full object-contain" />
-              </span>
+              <ProductTile product={p} size={52} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-semibold text-white">{pd?.name ?? p.slug}</div>
                 <div className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>{pd?.tagline}</div>

@@ -71,6 +71,8 @@ export default async function MiniAppPage({
           per: p.per,
           kind: p.kind,
           stock: p.stock,
+          icon: p.icon,
+          accent: p.accent,
         }))}
       />
     </LangProvider>

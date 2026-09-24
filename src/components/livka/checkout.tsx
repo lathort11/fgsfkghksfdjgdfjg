@@ -5,7 +5,7 @@ import { useI18n } from "@/components/livka/i18n-context";
 import type { ProductRow } from "@/db/schema";
 import { NETWORKS } from "@/lib/networks";
 import { DICTS } from "@/lib/i18n";
-import { plateFor, plateFocus } from "@/lib/plates";
+import { ProductTile } from "@/components/livka/product-art";
 import {
   ApiMark, Check, Copy, CryptoBadge, GeminiMark, GrokMark, OpenAiMark,
   Sparkle, XIcon, Zap, ArrowRight,
@@ -222,12 +222,7 @@ export function CheckoutModal({
 
         {/* header */}
         <div className="flex items-center gap-3 mb-5 pr-10">
-          <img
-            src={plateFor(product.slug)}
-            alt=""
-            className="w-14 h-14 rounded-2xl object-cover shrink-0"
-            style={{ objectPosition: plateFocus(product.slug), border: "1px solid var(--line)" }}
-          />
+          <ProductTile product={product} size={56} />
           <div className="min-w-0">
             <div className="ff-d text-base font-bold text-white truncate">{pdict?.name}</div>
             <div className="text-xs truncate" style={{ color: "var(--ink-3)" }}>

@@ -15,9 +15,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-# The public bot username is inlined into the client bundle at build time.
-ARG NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=LivkaMarketbot
-ENV NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=$NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
 # DATABASE_URL is only checked at import time; the real one comes at runtime.
 ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
 RUN npm run build

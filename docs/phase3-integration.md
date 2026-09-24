@@ -11,7 +11,7 @@
 | `BOT_GATEWAY_URL` | База Gateway бота для server-to-server (`http://bot:8080` в docker-сети) |
 | `BOT_INTERNAL_SECRET` | Общий секрет |
 | `TELEGRAM_BOT_TOKEN` | *Опционально.* Если задан — подписи Telegram проверяются локально, без Gateway |
-| `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` | Username бота для Login Widget (по умолчанию `LivkaMarketbot`) |
+| `TELEGRAM_BOT_USERNAME` | Username бота для Login Widget, читается в рантайме (по умолчанию `LivkaMarketbot`) |
 | `MINIAPP_BACKEND_URL` | Публичный URL бэкенда для `POST /miniapp/api/verify-ip` (см. `telegram-miniapp.md`) |
 
 ## 2. Сайт → бот (Gateway должен реализовать)
@@ -77,7 +77,14 @@
 | Без параметра | верифицированным — маркет, остальным — проверка IP |
 
 ## 5. Telegram Login на сайте
-В @BotFather: `/setdomain` → `livkamarket.app`. Без этого виджет показывает «Bot domain invalid».
+1. @BotFather → `/setdomain` → @LivkaMarketbot → `livkamarket.app`.
+   Совпадение **строгое**: `www.livkamarket.app`, превью и `localhost` получают «Bot domain invalid»
+   (проверено; поэтому Caddy редиректит www → apex).
+2. Сайт сам спрашивает Telegram (`GET /api/auth/telegram/widget?origin=…`) и показывает кнопку
+   только там, где вход реально работает. На остальных доменах блок скрыт, а в консоли браузера —
+   подсказка. После `/setdomain` кнопка появляется сама (кэш проверки ≤ 5 мин).
+3. Превью/стейджинг: отдельный тестовый бот с `/setdomain` = домен превью, и в окружении превью
+   `TELEGRAM_BOT_USERNAME` + `TELEGRAM_BOT_TOKEN` этого бота (без пересборки).
 
 ## 6. Деплой
 ```bash
