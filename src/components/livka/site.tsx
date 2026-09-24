@@ -1327,7 +1327,7 @@ export default function Site({
   };
 
   return (
-    <main>
+    <main className="pb-[88px] md:pb-0">
       <ScrollProgress />
       <PageGlow />
       <Navbar

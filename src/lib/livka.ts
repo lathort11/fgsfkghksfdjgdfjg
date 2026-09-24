@@ -217,7 +217,7 @@ export async function payOrder(input: {
 
   const row = rows[0];
   if (!row) throw new Error("ORDER_NOT_FOUND");
-  if (row.order.userId && row.order.userId !== input.userId) throw new Error("ORDER_NOT_FOUND");
+  if (!input.userId || row.order.userId !== input.userId) throw new Error("ORDER_NOT_FOUND");
   if (row.order.status === "delivered") return row;
 
   const credentials = makeCredentials(row.product.kind, row.product.slug);

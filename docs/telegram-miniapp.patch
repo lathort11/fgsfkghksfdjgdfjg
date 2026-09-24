@@ -1,0 +1,929 @@
+--- /dev/null
++++ b/src/lib/miniapp.ts
+@@ -0,0 +1,216 @@
++/*
++ * Telegram Mini App → LIVKAMARKET bot backend: IP verification client.
++ *
++ * The frontend decides nothing about the IP. It forwards the raw, signed
++ * Telegram WebApp `initData` string and renders whatever the backend answers.
++ * The backend validates the initData signature, reads the real client IP from
++ * its trusted reverse proxy, runs the VPN / proxy / datacenter / uniqueness
++ * checks, stores the IP, updates the status and qualifies referrals.
++ *
++ * Keep this module dependency-free: it is imported by the Mini App page and by
++ * scripts/test-miniapp-verify.mjs (plain Node, type stripping).
++ */
++
++export const VERIFY_PATH = "/miniapp/api/verify-ip";
++export const VERIFY_TIMEOUT_MS = 15_000;
++
++export type VerifyState =
++  | "verified"
++  | "vpn"
++  | "datacenter"
++  | "duplicate"
++  | "registration"
++  | "session"
++  | "bad_request"
++  | "forbidden"
++  | "rate_limited"
++  | "unavailable"
++  | "timeout"
++  | "offline"
++  | "error";
++
++export type VerifyResult = {
++  state: VerifyState;
++  httpStatus: number | null;
++  messageKey: string | null;
++  backendStatus: string | null;
++  /** Short technical code for support (e.g. "HTTP 404 · invalid_json"). */
++  detail: string | null;
++  /** IP as determined by the backend. Display only, never sent anywhere. */
++  ip: string | null;
++  referralQualified: boolean;
++};
++
++/* Only the keys / statuses documented for the backend contract. */
++const BY_MESSAGE_KEY: Record<string, VerifyState> = {
++  "ip.verified": "verified",
++  "ip.vpn_detected": "vpn",
++  "ip.datacenter": "datacenter",
++  "ip.duplicate": "duplicate",
++  "verification.required": "registration",
++  "common.error": "error",
++};
++
++const BY_STATUS: Record<string, VerifyState> = {
++  verified: "verified",
++  vpn_detected: "vpn",
++  datacenter: "datacenter",
++  duplicate: "duplicate",
++  error: "error",
++};
++
++function byHttpStatus(status: number): VerifyState | null {
++  if (status === 400) return "bad_request";
++  if (status === 401) return "session";
++  if (status === 403) return "forbidden";
++  if (status === 404) return "unavailable";
++  if (status === 409) return "duplicate";
++  if (status === 429) return "rate_limited";
++  if (status === 502 || status === 503 || status === 504) return "unavailable";
++  if (status >= 500) return "error";
++  return null;
++}
++
++type JsonObject = Record<string, unknown>;
++
++function parseObject(raw: string): { body: JsonObject | null; invalidJson: boolean } {
++  if (raw.trim() === "") return { body: null, invalidJson: false };
++  try {
++    const parsed: unknown = JSON.parse(raw);
++    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
++      return { body: parsed as JsonObject, invalidJson: false };
++    }
++    return { body: null, invalidJson: true };
++  } catch {
++    return { body: null, invalidJson: true };
++  }
++}
++
++function str(value: unknown): string | null {
++  return typeof value === "string" && value.length > 0 ? value : null;
++}
++
++function result(state: VerifyState, partial: Partial<VerifyResult> = {}): VerifyResult {
++  return {
++    state,
++    httpStatus: null,
++    messageKey: null,
++    backendStatus: null,
++    detail: null,
++    ip: null,
++    referralQualified: false,
++    ...partial,
++  };
++}
++
++/**
++ * Map an HTTP status + raw response text to a UI state.
++ * Priority: success payload → specific message_key / status → HTTP status.
++ * A generic "common.error" / "error" never hides a more specific HTTP status.
++ */
++export function classifyResponse(httpStatus: number, rawBody: string): VerifyResult {
++  const { body, invalidJson } = parseObject(rawBody);
++  const messageKey = str(body?.message_key);
++  const backendStatus = str(body?.status);
++  const is2xx = httpStatus >= 200 && httpStatus < 300;
++  const code = `HTTP ${httpStatus}${invalidJson ? " · invalid_json" : ""}`;
++  const base = { httpStatus, messageKey, backendStatus };
++
++  const fromBody =
++    (messageKey ? BY_MESSAGE_KEY[messageKey] : undefined) ??
++    (backendStatus ? BY_STATUS[backendStatus] : undefined) ??
++    null;
++
++  if (body && body.ok === true) {
++    if (is2xx && fromBody === "verified") {
++      return result("verified", {
++        ...base,
++        ip: str(body.ip),
++        referralQualified: body.referral_qualified === true,
++      });
++    }
++    // ok:true without the documented success payload: never show a false success.
++    return result("error", { ...base, detail: `${code} · unexpected_payload` });
++  }
++
++  if (fromBody && fromBody !== "verified" && fromBody !== "error") {
++    return result(fromBody, { ...base, detail: code });
++  }
++
++  const fromHttp = byHttpStatus(httpStatus);
++  if (fromHttp) return result(fromHttp, { ...base, detail: code });
++  if (invalidJson) return result("unavailable", { ...base, detail: code });
++  return result("error", { ...base, detail: code });
++}
++
++/** "" → same origin (reverse proxy routes /miniapp/api/* to the backend). */
++export function buildVerifyUrl(backendBase: string): string {
++  return `${backendBase.trim().replace(/\/+$/, "")}${VERIFY_PATH}`;
++}
++
++/**
++ * Validate MINIAPP_BACKEND_URL. It is public (the browser calls it directly),
++ * so it must never contain credentials. HTTPS is required because Telegram
++ * serves Mini Apps over HTTPS and browsers block mixed content.
++ */
++export function normalizeBackendBase(raw: string | undefined): { base: string; error: string | null } {
++  const value = (raw ?? "").trim();
++  if (!value) return { base: "", error: null };
++
++  let url: URL;
++  try {
++    url = new URL(value);
++  } catch {
++    return { base: "", error: "MINIAPP_BACKEND_URL is not an absolute URL" };
++  }
++  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
++  if (url.protocol !== "https:" && !(url.protocol === "http:" && local)) {
++    return { base: "", error: "MINIAPP_BACKEND_URL must use https://" };
++  }
++  if (url.username || url.password) {
++    return { base: "", error: "MINIAPP_BACKEND_URL must not contain credentials" };
++  }
++  if (url.search || url.hash) {
++    return { base: "", error: "MINIAPP_BACKEND_URL must not contain a query or hash" };
++  }
++  return { base: `${url.origin}${url.pathname.replace(/\/+$/, "")}`, error: null };
++}
++
++/**
++ * POST { initData } to the backend. The body contains nothing else: no user
++ * ID, no IP, no fields from initDataUnsafe. Cookies are not sent.
++ */
++export async function verifyIp(options: {
++  url: string;
++  initData: string;
++  timeoutMs?: number;
++  fetchImpl?: typeof fetch;
++  isOnline?: () => boolean;
++}): Promise<VerifyResult> {
++  const doFetch = options.fetchImpl ?? fetch;
++  const controller = new AbortController();
++  let timedOut = false;
++  const timer = setTimeout(() => {
++    timedOut = true;
++    controller.abort();
++  }, options.timeoutMs ?? VERIFY_TIMEOUT_MS);
++
++  try {
++    const response = await doFetch(options.url, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({ initData: options.initData }),
++      credentials: "omit",
++      signal: controller.signal,
++    });
++    const text = await response.text();
++    return classifyResponse(response.status, text);
++  } catch {
++    if (timedOut) return result("timeout", { detail: "timeout" });
++    const online = options.isOnline ? options.isOnline() : true;
++    if (!online) return result("offline", { detail: "offline" });
++    return result("unavailable", { detail: "network" });
++  } finally {
++    clearTimeout(timer);
++  }
++}
+--- /dev/null
++++ b/src/components/livka/miniapp.tsx
+@@ -0,0 +1,308 @@
++"use client";
++
++import Script from "next/script";
++import { useCallback, useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
++import { useI18n } from "@/components/livka/i18n-context";
++import { Check, Clock, Globe, KeyIcon, LivkaMark, Lock, Shield, Telegram, UserIcon, XIcon } from "@/components/livka/icons";
++import { buildVerifyUrl, verifyIp, type VerifyResult, type VerifyState } from "@/lib/miniapp";
++
++/* Official Telegram Mini Apps SDK. Loaded only on this route. */
++const TELEGRAM_SDK_SRC = "https://telegram.org/js/telegram-web-app.js";
++const SDK_TIMEOUT_MS = 10_000;
++const CLOSE_DELAY_MS = 1_800;
++const CLOSE_CHECK_MS = 1_500;
++const APP_BG = "#070708";
++
++/*
++ * Only the parts of Telegram.WebApp used here. `initDataUnsafe` is left out on
++ * purpose: nothing on this page may read an unverified user ID. The backend
++ * gets the signed `initData` string and verifies it itself.
++ */
++type TelegramWebApp = {
++  initData: string;
++  ready: () => void;
++  expand: () => void;
++  close: () => void;
++  isVersionAtLeast?: (version: string) => boolean;
++  setBackgroundColor?: (color: string) => void;
++  setHeaderColor?: (color: string) => void;
++  HapticFeedback?: { notificationOccurred: (type: "error" | "success" | "warning") => void };
++};
++
++declare global {
++  interface Window {
++    Telegram?: { WebApp?: TelegramWebApp };
++  }
++}
++
++type View = "loading" | "no_telegram" | "no_init_data" | VerifyState;
++
++const ICONS: Partial<Record<View, ComponentType<SVGProps<SVGSVGElement>>>> = {
++  verified: Check,
++  vpn: Shield,
++  datacenter: Globe,
++  duplicate: UserIcon,
++  registration: UserIcon,
++  session: KeyIcon,
++  bad_request: KeyIcon,
++  forbidden: Lock,
++  rate_limited: Clock,
++  timeout: Clock,
++  offline: Clock,
++  no_init_data: Telegram,
++  no_telegram: Telegram,
++};
++
++function getWebApp(): TelegramWebApp | undefined {
++  return typeof window === "undefined" ? undefined : window.Telegram?.WebApp;
++}
++
++function supports(tg: TelegramWebApp, version: string): boolean {
++  try {
++    return tg.isVersionAtLeast?.(version) === true;
++  } catch {
++    return false;
++  }
++}
++
++function attempt(fn: () => void) {
++  try {
++    fn();
++  } catch {
++    /* Older clients or outside Telegram: the method is optional. */
++  }
++}
++
++export default function MiniAppVerify({
++  backendBase,
++  configError,
++}: {
++  backendBase: string;
++  configError: boolean;
++}) {
++  const { t } = useI18n();
++  const [view, setView] = useState<View>("loading");
++  const [outcome, setOutcome] = useState<VerifyResult | null>(null);
++  const [closeFailed, setCloseFailed] = useState(false);
++  const [hasWebApp, setHasWebApp] = useState(false);
++  const booted = useRef(false);
++  const inflight = useRef(false);
++  const timers = useRef<number[]>([]);
++
++  const schedule = useCallback((fn: () => void, ms: number) => {
++    timers.current.push(window.setTimeout(fn, ms));
++  }, []);
++
++  useEffect(() => {
++    const bag = timers;
++    return () => {
++      bag.current.forEach((id) => window.clearTimeout(id));
++      bag.current = [];
++    };
++  }, []);
++
++  const closeApp = useCallback(() => {
++    const tg = getWebApp();
++    if (tg) attempt(() => tg.close());
++    // Still visible a moment later → closing is not available here.
++    schedule(() => setCloseFailed(true), CLOSE_CHECK_MS);
++  }, [schedule]);
++
++  const verify = useCallback(async () => {
++    if (inflight.current) return;
++    const tg = getWebApp();
++    if (!tg) {
++      setView("no_telegram");
++      return;
++    }
++
++    // Signed launch payload, read at call time and never stored anywhere.
++    const initData = typeof tg.initData === "string" ? tg.initData : "";
++    if (!initData) {
++      setView("no_init_data");
++      return;
++    }
++
++    setOutcome(null);
++    setCloseFailed(false);
++
++    if (configError) {
++      setOutcome({
++        state: "unavailable",
++        httpStatus: null,
++        messageKey: null,
++        backendStatus: null,
++        detail: "config",
++        ip: null,
++        referralQualified: false,
++      });
++      setView("unavailable");
++      return;
++    }
++
++    inflight.current = true;
++    setView("loading");
++    try {
++      const res = await verifyIp({
++        url: buildVerifyUrl(backendBase),
++        initData,
++        isOnline: () => navigator.onLine !== false,
++      });
++      setOutcome(res);
++      setView(res.state);
++
++      if (res.state === "verified") {
++        if (supports(tg, "6.1")) attempt(() => tg.HapticFeedback?.notificationOccurred("success"));
++        schedule(closeApp, CLOSE_DELAY_MS);
++      }
++    } finally {
++      inflight.current = false;
++    }
++  }, [backendBase, configError, closeApp, schedule]);
++
++  const boot = useCallback(() => {
++    if (booted.current) return;
++    const tg = getWebApp();
++    if (!tg) return;
++    booted.current = true;
++    setHasWebApp(true);
++
++    attempt(() => tg.ready());
++    attempt(() => tg.expand());
++    if (supports(tg, "6.1")) attempt(() => tg.setBackgroundColor?.(APP_BG));
++    if (supports(tg, "6.9")) attempt(() => tg.setHeaderColor?.(APP_BG));
++
++    void verify();
++  }, [verify]);
++
++  useEffect(() => {
++    // If the SDK never arrives (blocked, offline), stop the spinner and say why.
++    const id = window.setTimeout(() => {
++      if (!booted.current) setView("no_telegram");
++    }, SDK_TIMEOUT_MS);
++    return () => window.clearTimeout(id);
++  }, []);
++
++  const retry = () => {
++    if (view === "no_telegram") {
++      window.location.reload();
++      return;
++    }
++    void verify();
++  };
++
++  const copy = t.miniapp.states[view];
++  const Icon = ICONS[view] ?? XIcon;
++  const busy = view === "loading";
++  const ok = view === "verified";
++  // Without initData a retry cannot help: the user has to reopen the Mini App
++  // from the bot's WebApp button, so "back to Telegram" becomes the main action.
++  const canRetry = !ok && view !== "no_init_data";
++  const backIsPrimary = ok || view === "no_init_data";
++
++  return (
++    <>
++      <Script
++        src={TELEGRAM_SDK_SRC}
++        strategy="afterInteractive"
++        onReady={boot}
++        onError={() => {
++          if (!booted.current) setView("no_telegram");
++        }}
++      />
++
++      <main className="flex min-h-[100dvh] items-center justify-center px-5 py-10">
++        <section className="glass w-full max-w-sm p-7 text-center" aria-labelledby="miniapp-title">
++          <div
++            className="flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.2em]"
++            style={{ color: "var(--ink-3)" }}
++          >
++            <LivkaMark className="h-4 w-4" />
++            LIVKAMARKET
++          </div>
++
++          <div
++            className="mx-auto mt-7 flex h-16 w-16 items-center justify-center rounded-2xl"
++            style={{
++              background: ok ? "rgba(16,185,129,.14)" : busy ? "rgba(244,241,234,.06)" : "rgba(231,194,122,.12)",
++              color: ok ? "#10b981" : busy ? "var(--ink)" : "#e7c27a",
++            }}
++          >
++            {busy ? (
++              <span
++                className="h-7 w-7 animate-spin rounded-full border-2 border-white/15 border-t-white"
++                aria-hidden="true"
++              />
++            ) : (
++              <Icon className="h-7 w-7" />
++            )}
++          </div>
++
++          <div role="status" aria-live="polite">
++            <h1 id="miniapp-title" className="ff-d mt-6 text-xl leading-snug text-white">
++              {copy.t}
++            </h1>
++            <p className="mt-3 text-[14px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
++              {ok && closeFailed ? t.miniapp.closeManually : copy.d}
++            </p>
++          </div>
++
++          {ok && (outcome?.ip || outcome?.referralQualified) && (
++            <div
++              className="mt-5 space-y-2 rounded-2xl p-4 text-left text-[13px]"
++              style={{ background: "rgba(255,255,255,.03)", border: "1px solid var(--line)" }}
++            >
++              {outcome?.ip && (
++                <div className="flex items-center justify-between gap-3">
++                  <span style={{ color: "var(--ink-3)" }}>{t.miniapp.ip}</span>
++                  <span className="font-mono text-white">{outcome.ip}</span>
++                </div>
++              )}
++              {outcome?.referralQualified && (
++                <div className="flex items-center gap-2" style={{ color: "#10b981" }}>
++                  <Check className="h-4 w-4" />
++                  {t.miniapp.referral}
++                </div>
++              )}
++            </div>
++          )}
++
++          {!busy && (
++            <div className="mt-7 flex flex-col gap-2.5">
++              {canRetry && (
++                <button type="button" onClick={retry} className="btn btn-primary w-full !py-3.5 text-sm">
++                  {view === "no_telegram" ? t.miniapp.reload : t.miniapp.retry}
++                </button>
++              )}
++              {(ok || hasWebApp) && (
++                <button
++                  type="button"
++                  onClick={closeApp}
++                  className={`btn w-full !py-3.5 text-sm ${backIsPrimary ? "btn-primary" : "btn-ghost"}`}
++                >
++                  {t.miniapp.back}
++                </button>
++              )}
++            </div>
++          )}
++
++          {!ok && closeFailed && (
++            <p className="mt-3 text-[12px]" style={{ color: "var(--ink-3)" }}>
++              {t.miniapp.closeManually}
++            </p>
++          )}
++
++          {!busy && !ok && outcome?.detail && (
++            <p className="mt-4 font-mono text-[11px]" style={{ color: "var(--ink-3)" }}>
++              {t.miniapp.code}: {outcome.detail}
++            </p>
++          )}
++
++          <p className="mt-6 text-[11px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
++            {t.miniapp.note}
++          </p>
++        </section>
++      </main>
++    </>
++  );
++}
+--- /dev/null
++++ b/src/app/miniapp/page.tsx
+@@ -0,0 +1,44 @@
++import type { Metadata, Viewport } from "next";
++import { cookies } from "next/headers";
++import MiniAppVerify from "@/components/livka/miniapp";
++import { LangProvider } from "@/components/livka/i18n-context";
++import { DICTS, LOCALE_COOKIE, isLocale, type Locale } from "@/lib/i18n";
++import { normalizeBackendBase } from "@/lib/miniapp";
++
++// Read MINIAPP_BACKEND_URL at request time, not at build time.
++export const dynamic = "force-dynamic";
++
++export const viewport: Viewport = {
++  width: "device-width",
++  initialScale: 1,
++  themeColor: "#070708",
++};
++
++async function getLocale(): Promise<Locale> {
++  const value = (await cookies()).get(LOCALE_COOKIE)?.value;
++  return isLocale(value) ? value : "ru";
++}
++
++export async function generateMetadata(): Promise<Metadata> {
++  const locale = await getLocale();
++  return {
++    title: `LIVKAMARKET — ${DICTS[locale].miniapp.title}`,
++    robots: { index: false, follow: false },
++  };
++}
++
++export default async function MiniAppPage() {
++  const locale = await getLocale();
++
++  // Public base URL of the bot backend (the browser calls it directly).
++  // Empty → same origin: the reverse proxy must route /miniapp/api/* to the
++  // backend so that it sees the user's real IP. Never proxy through Next.js.
++  const { base, error } = normalizeBackendBase(process.env.MINIAPP_BACKEND_URL);
++  if (error) console.error(`[miniapp] ${error}`);
++
++  return (
++    <LangProvider initial={locale}>
++      <MiniAppVerify backendBase={base} configError={error !== null} />
++    </LangProvider>
++  );
++}
+--- /dev/null
++++ b/scripts/test-miniapp-verify.mjs
+@@ -0,0 +1,192 @@
++// Integration test for src/lib/miniapp.ts against a LOCAL MOCK of the bot
++// backend: real HTTP requests over loopback, no Telegram, no real backend,
++// no bot token. The mock only checks what the client sends and replays the
++// documented responses; it does not validate signatures or IPs.
++//
++// Run: node scripts/test-miniapp-verify.mjs   (Node >= 22.18, type stripping)
++import http from "node:http";
++import assert from "node:assert/strict";
++import { once } from "node:events";
++import {
++  VERIFY_PATH,
++  buildVerifyUrl,
++  classifyResponse,
++  normalizeBackendBase,
++  verifyIp,
++} from "../src/lib/miniapp.ts";
++
++// Opaque placeholder: the client must forward it byte-for-byte. In the app the
++// value only ever comes from Telegram.WebApp.initData.
++const INIT_DATA = "opaque%20placeholder&not=real-initdata&\"quoted\"";
++
++const json = (value) => JSON.stringify(value);
++const CASES = {
++  // 192.0.2.10 is an RFC 5737 documentation address, used only by this mock.
++  verified: [200, json({ ok: true, status: "verified", message_key: "ip.verified", ip: "192.0.2.10", referral_qualified: true })],
++  vpn: [200, json({ ok: false, status: "vpn_detected", message_key: "ip.vpn_detected" })],
++  datacenter: [403, json({ ok: false, status: "datacenter", message_key: "ip.datacenter" })],
++  duplicate: [409, json({ ok: false, status: "duplicate", message_key: "ip.duplicate" })],
++  duplicate_bare: [409, ""],
++  registration: [403, json({ ok: false, status: "error", message_key: "verification.required" })],
++  common_error: [200, json({ ok: false, status: "error", message_key: "common.error" })],
++  bad_request: [400, json({ ok: false, status: "error", message_key: "common.error" })],
++  session: [401, json({ ok: false, status: "error", message_key: "common.error" })],
++  forbidden: [403, "<html>Forbidden</html>"],
++  not_found: [404, "<!DOCTYPE html><html><body>404</body></html>"],
++  rate_limited: [429, json({ ok: false })],
++  server_error: [500, json({ ok: false, status: "error", message_key: "common.error" })],
++  bad_gateway: [502, "<html>502 Bad Gateway</html>"],
++  unavailable: [503, json({ ok: false, status: "error", message_key: "common.error" })],
++  invalid_json: [200, "<html>not json</html>"],
++  ok_without_status: [200, json({ ok: true })],
++  slow: [200, json({ ok: true, status: "verified", message_key: "ip.verified" })],
++};
++
++const seen = [];
++const server = http.createServer(async (req, res) => {
++  const name = req.url.split("/")[1];
++  let raw = "";
++  for await (const chunk of req) raw += chunk;
++  seen.push({
++    name,
++    method: req.method,
++    path: req.url.slice(name.length + 1),
++    type: req.headers["content-type"] ?? "",
++    cookie: req.headers.cookie,
++    raw,
++  });
++  if (name === "slow") await new Promise((r) => setTimeout(r, 1500));
++  const [status, body] = CASES[name] ?? [500, ""];
++  res.writeHead(status, { "Content-Type": body.startsWith("{") ? "application/json" : "text/html" });
++  res.end(body);
++});
++server.listen(0, "127.0.0.1");
++await once(server, "listening");
++const origin = `http://127.0.0.1:${server.address().port}`;
++
++let passed = 0;
++const failed = [];
++async function check(name, fn) {
++  try {
++    await fn();
++    passed += 1;
++    console.log(`  ✓ ${name}`);
++  } catch (error) {
++    failed.push(name);
++    console.log(`  ✗ ${name}\n      ${error.message.split("\n").join("\n      ")}`);
++  }
++}
++const call = (name, extra = {}) =>
++  verifyIp({ url: buildVerifyUrl(`${origin}/${name}`), initData: INIT_DATA, ...extra });
++
++console.log("HTTP responses → UI state");
++const expected = [
++  ["verified", "verified"],
++  ["vpn", "vpn"],
++  ["datacenter", "datacenter"],
++  ["duplicate", "duplicate"],
++  ["duplicate_bare", "duplicate"],
++  ["registration", "registration"],
++  ["common_error", "error"],
++  ["bad_request", "bad_request"],
++  ["session", "session"],
++  ["forbidden", "forbidden"],
++  ["not_found", "unavailable"],
++  ["rate_limited", "rate_limited"],
++  ["server_error", "error"],
++  ["bad_gateway", "unavailable"],
++  ["unavailable", "unavailable"],
++  ["invalid_json", "unavailable"],
++  ["ok_without_status", "error"],
++];
++for (const [name, state] of expected) {
++  await check(`${name} (HTTP ${CASES[name][0]}) → ${state}`, async () => {
++    assert.equal((await call(name)).state, state);
++  });
++}
++
++console.log("Payload details");
++await check("verified keeps backend ip + referral flag", async () => {
++  const r = await call("verified");
++  assert.equal(r.ip, "192.0.2.10");
++  assert.equal(r.referralQualified, true);
++  assert.equal(r.messageKey, "ip.verified");
++});
++await check("404 HTML is reported as HTTP 404 · invalid_json", async () => {
++  assert.equal((await call("not_found")).detail, "HTTP 404 · invalid_json");
++});
++await check("200 non-JSON is reported as HTTP 200 · invalid_json", async () => {
++  assert.equal((await call("invalid_json")).detail, "HTTP 200 · invalid_json");
++});
++await check("ok:true on non-2xx is never a success", () => {
++  assert.equal(classifyResponse(500, json({ ok: true, status: "verified" })).state, "error");
++});
++await check("ok:false + status verified is not a success", () => {
++  assert.notEqual(classifyResponse(200, json({ ok: false, status: "verified" })).state, "verified");
++});
++
++console.log("Transport failures");
++await check("timeout → timeout", async () => {
++  const r = await call("slow", { timeoutMs: 300 });
++  assert.equal(r.state, "timeout");
++  assert.equal(r.detail, "timeout");
++});
++await check("connection refused → unavailable (network)", async () => {
++  const closed = http.createServer();
++  closed.listen(0, "127.0.0.1");
++  await once(closed, "listening");
++  const port = closed.address().port;
++  closed.close();
++  await once(closed, "close");
++  const r = await verifyIp({ url: buildVerifyUrl(`http://127.0.0.1:${port}`), initData: INIT_DATA });
++  assert.equal(r.state, "unavailable");
++  assert.equal(r.detail, "network");
++});
++await check("no network (navigator.onLine=false) → offline", async () => {
++  const r = await verifyIp({
++    url: buildVerifyUrl(origin),
++    initData: INIT_DATA,
++    fetchImpl: async () => {
++      throw new TypeError("Failed to fetch");
++    },
++    isOnline: () => false,
++  });
++  assert.equal(r.state, "offline");
++});
++
++console.log("Request shape (every request the mock received)");
++await check(`${seen.length} requests: POST ${VERIFY_PATH}, JSON, body is exactly { initData }, no cookies`, () => {
++  assert.ok(seen.length >= expected.length);
++  for (const r of seen) {
++    assert.equal(r.method, "POST", `${r.name}: method`);
++    assert.equal(r.path, VERIFY_PATH, `${r.name}: path`);
++    assert.match(r.type, /^application\/json/, `${r.name}: content-type`);
++    assert.equal(r.cookie, undefined, `${r.name}: cookie header`);
++    assert.deepEqual(JSON.parse(r.raw), { initData: INIT_DATA }, `${r.name}: body`);
++  }
++});
++
++console.log("Backend URL configuration");
++await check("empty → same origin /miniapp/api/verify-ip", () => {
++  assert.deepEqual(normalizeBackendBase(""), { base: "", error: null });
++  assert.equal(buildVerifyUrl(""), "/miniapp/api/verify-ip");
++});
++await check("https origin with trailing slash and path prefix", () => {
++  assert.equal(normalizeBackendBase("https://bot.example.com/").base, "https://bot.example.com");
++  assert.equal(
++    buildVerifyUrl(normalizeBackendBase("https://bot.example.com/api/").base),
++    "https://bot.example.com/api/miniapp/api/verify-ip",
++  );
++});
++await check("rejects http (non-local), credentials, query, garbage", () => {
++  assert.notEqual(normalizeBackendBase("http://bot.example.com").error, null);
++  assert.notEqual(normalizeBackendBase("https://user:pass@bot.example.com").error, null);
++  assert.notEqual(normalizeBackendBase("https://bot.example.com/?token=1").error, null);
++  assert.notEqual(normalizeBackendBase("not a url").error, null);
++  assert.equal(normalizeBackendBase("http://localhost:8080").error, null);
++});
++
++server.closeAllConnections?.();
++server.close();
++console.log(`\n${passed} passed, ${failed.length} failed`);
++process.exitCode = failed.length ? 1 : 0;
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,19 @@
++# PostgreSQL connection used by Drizzle ORM.
++DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/app_db
++
++# Base URL of the LIVKAMARKET Telegram bot backend that serves
++# POST /miniapp/api/verify-ip (used by the /miniapp page).
++#
++# The browser calls this URL directly, so it is PUBLIC: never put tokens,
++# passwords or the bot token here. It must be https:// (http:// is accepted
++# only for localhost during development).
++#
++# - Leave EMPTY when a reverse proxy on the same domain routes /miniapp/api/*
++#   to the backend. Same origin, no CORS needed.
++# - Set to e.g. https://bot.example.com when the backend is on another domain.
++#   The backend must then allow this site's origin via CORS (see docs).
++#
++# Read at request time by src/app/miniapp/page.tsx; restart the server after
++# changing it. Do NOT point it at this Next.js app: the backend has to see the
++# user's real IP from its own reverse proxy.
++MINIAPP_BACKEND_URL=
+--- a/src/lib/i18n.ts
++++ b/src/lib/i18n.ts
+@@ -308,6 +308,35 @@
+     noOrders: "Заказов пока нет",
+     viewAll: "Все заказы",
+   },
++  miniapp: {
++    title: "Проверка подключения",
++    states: {
++      loading: { t: "Проверяем подключение...", d: "Это займёт несколько секунд." },
++      verified: { t: "IP успешно подтверждён", d: "Возвращаем вас в Telegram…" },
++      vpn: { t: "Отключите VPN или Proxy", d: "Проверка проходит только без VPN, прокси и анонимайзеров. Отключите их и нажмите «Проверить снова»." },
++      datacenter: { t: "Используйте домашний или мобильный интернет", d: "Этот IP принадлежит хостингу или дата-центру. Подключитесь через домашний Wi‑Fi или мобильную сеть." },
++      duplicate: { t: "Этот IP уже зарегистрирован", d: "С этого IP уже подтверждён другой аккаунт. Подключитесь через свою сеть." },
++      registration: { t: "Сначала завершите регистрацию в Telegram-боте", d: "Вернитесь в бота, завершите регистрацию и снова откройте проверку." },
++      session: { t: "Данные Telegram не прошли проверку", d: "Сессия устарела или повреждена. Закройте окно и откройте проверку заново из бота." },
++      bad_request: { t: "Не удалось отправить данные проверки", d: "Закройте окно и откройте проверку заново из бота." },
++      forbidden: { t: "Доступ к проверке запрещён", d: "Откройте проверку из Telegram-бота. Если ошибка повторяется, напишите в поддержку." },
++      rate_limited: { t: "Слишком много попыток", d: "Подождите минуту и попробуйте снова." },
++      unavailable: { t: "Сервис временно недоступен", d: "Попробуйте ещё раз через несколько минут." },
++      timeout: { t: "Сервер не ответил вовремя", d: "Проверьте интернет и попробуйте ещё раз." },
++      offline: { t: "Нет подключения к интернету", d: "Подключитесь к сети и повторите проверку." },
++      error: { t: "Не удалось выполнить проверку", d: "Попробуйте ещё раз. Если ошибка повторяется, напишите в поддержку." },
++      no_init_data: { t: "Откройте проверку из Telegram", d: "Эта страница работает только внутри Telegram. Нажмите кнопку проверки в боте." },
++      no_telegram: { t: "Не удалось загрузить Telegram WebApp", d: "Проверьте подключение и откройте страницу заново из бота." },
++    },
++    retry: "Проверить снова",
++    reload: "Обновить страницу",
++    back: "Вернуться в Telegram",
++    ip: "IP",
++    referral: "Приглашение засчитано",
++    closeManually: "Если окно не закрылось, закройте его вручную.",
++    code: "Код",
++    note: "IP определяет сервер. Страница передаёт только подписанные данные Telegram.",
++  },
+   lang: "Язык",
+ };
+ 
+@@ -609,6 +638,35 @@
+     noOrders: "No orders yet",
+     viewAll: "All orders",
+   },
++  miniapp: {
++    title: "Connection check",
++    states: {
++      loading: { t: "Checking your connection...", d: "This takes a few seconds." },
++      verified: { t: "IP verified", d: "Taking you back to Telegram…" },
++      vpn: { t: "Turn off VPN or proxy", d: "The check only passes without VPNs, proxies or anonymizers. Turn them off and tap “Check again”." },
++      datacenter: { t: "Use home or mobile internet", d: "This IP belongs to a hosting provider or datacenter. Connect via home Wi‑Fi or a mobile network." },
++      duplicate: { t: "This IP is already registered", d: "Another account has already been verified from this IP. Use your own connection." },
++      registration: { t: "Finish registration in the Telegram bot first", d: "Go back to the bot, complete registration and open the check again." },
++      session: { t: "Telegram data failed verification", d: "The session is expired or damaged. Close this window and open the check again from the bot." },
++      bad_request: { t: "Could not send verification data", d: "Close this window and open the check again from the bot." },
++      forbidden: { t: "Access to the check is forbidden", d: "Open the check from the Telegram bot. If it keeps happening, contact support." },
++      rate_limited: { t: "Too many attempts", d: "Wait a minute and try again." },
++      unavailable: { t: "Service temporarily unavailable", d: "Please try again in a few minutes." },
++      timeout: { t: "The server did not respond in time", d: "Check your internet connection and try again." },
++      offline: { t: "No internet connection", d: "Connect to a network and run the check again." },
++      error: { t: "Verification failed", d: "Try again. If it keeps happening, contact support." },
++      no_init_data: { t: "Open the check from Telegram", d: "This page only works inside Telegram. Tap the verification button in the bot." },
++      no_telegram: { t: "Could not load Telegram WebApp", d: "Check your connection and open the page again from the bot." },
++    },
++    retry: "Check again",
++    reload: "Reload page",
++    back: "Back to Telegram",
++    ip: "IP",
++    referral: "Referral counted",
++    closeManually: "If the window did not close, close it manually.",
++    code: "Code",
++    note: "Your IP is determined by the server. This page only sends signed Telegram data.",
++  },
+   lang: "Language",
+ };
+ 
+@@ -907,6 +965,35 @@
+     noOrders: "还没有订单",
+     viewAll: "全部订单",
+   },
++  miniapp: {
++    title: "连接检查",
++    states: {
++      loading: { t: "正在检查连接...", d: "只需几秒钟。" },
++      verified: { t: "IP 验证成功", d: "正在返回 Telegram…" },
++      vpn: { t: "请关闭 VPN 或代理", d: "仅在未使用 VPN、代理或匿名工具时才能通过检查。关闭后点击「重新检查」。" },
++      datacenter: { t: "请使用家庭或移动网络", d: "该 IP 属于主机商或数据中心。请通过家庭 Wi‑Fi 或移动网络连接。" },
++      duplicate: { t: "该 IP 已被注册", d: "已有其他账户通过此 IP 完成验证。请使用你自己的网络。" },
++      registration: { t: "请先在 Telegram 机器人中完成注册", d: "返回机器人完成注册，然后重新打开检查。" },
++      session: { t: "Telegram 数据未通过验证", d: "会话已过期或损坏。请关闭窗口，从机器人重新打开检查。" },
++      bad_request: { t: "无法发送验证数据", d: "请关闭窗口，从机器人重新打开检查。" },
++      forbidden: { t: "禁止访问检查", d: "请从 Telegram 机器人打开检查。如果问题持续，请联系客服。" },
++      rate_limited: { t: "尝试次数过多", d: "请等待一分钟后重试。" },
++      unavailable: { t: "服务暂时不可用", d: "请几分钟后重试。" },
++      timeout: { t: "服务器未及时响应", d: "请检查网络后重试。" },
++      offline: { t: "没有网络连接", d: "请连接网络后重新检查。" },
++      error: { t: "检查失败", d: "请重试。如果问题持续，请联系客服。" },
++      no_init_data: { t: "请从 Telegram 打开检查", d: "此页面只能在 Telegram 内使用。请点击机器人中的验证按钮。" },
++      no_telegram: { t: "无法加载 Telegram WebApp", d: "请检查网络，并从机器人重新打开页面。" },
++    },
++    retry: "重新检查",
++    reload: "刷新页面",
++    back: "返回 Telegram",
++    ip: "IP",
++    referral: "邀请已计入",
++    closeManually: "如果窗口没有关闭，请手动关闭。",
++    code: "代码",
++    note: "IP 由服务器判断。本页面只发送经 Telegram 签名的数据。",
++  },
+   lang: "语言",
+ };
+ 
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -855,11 +855,6 @@
+   outline-offset: 3px;
+ }
+ 
+-@media (max-width: 767px) {
+-  body {
+-    padding-bottom: 88px;
+-  }
+-}
+ 
+ /* ═════════════ REDUCED MOTION ═════════════ */
+ @media (prefers-reduced-motion: reduce) {
+--- a/src/components/livka/site.tsx
++++ b/src/components/livka/site.tsx
+@@ -1327,7 +1327,7 @@
+   };
+ 
+   return (
+-    <main>
++    <main className="pb-[88px] md:pb-0">
+       <ScrollProgress />
+       <PageGlow />
+       <Navbar

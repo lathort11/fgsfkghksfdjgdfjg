@@ -855,11 +855,6 @@ input::placeholder {
   outline-offset: 3px;
 }
 
-@media (max-width: 767px) {
-  body {
-    padding-bottom: 88px;
-  }
-}
 
 /* ═════════════ REDUCED MOTION ═════════════ */
 @media (prefers-reduced-motion: reduce) {
