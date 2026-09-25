@@ -114,12 +114,12 @@ export function AuthModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+      className="modal-backdrop fixed inset-0 z-[110] flex items-center justify-center p-4"
       style={{ background: "rgba(5,5,11,.88)", backdropFilter: "blur(18px)" }}
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-md glass p-7 sm:p-8 modal-in"
+        className="modal-surface relative w-full max-w-md p-7 sm:p-8 modal-in"
         style={{ borderRadius: 28 }}
         onClick={(e) => e.stopPropagation()}
       >

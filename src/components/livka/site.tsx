@@ -10,6 +10,7 @@ import { ProfileModal } from "@/components/livka/profile";
 import type { ProductRow } from "@/db/schema";
 import { LOCALES, type Locale } from "@/lib/i18n";
 import { ProductArt, ProductTile, accentVars } from "@/components/livka/product-art";
+import { MobileTabBar } from "@/components/livka/mobile-tabbar";
 import {
   ArrowRight, ArrowUpRight, Check, ChevronDown, Clock,
   Headset, MenuIcon, Receipt, Search, Shield,
@@ -62,8 +63,9 @@ function LangSwitcher() {
       <span
         className="absolute top-1 bottom-1 rounded-xl transition-all duration-500 lang-ind"
         style={{
-          width: `calc(${100 / LOCALES.length}% - ${8 / LOCALES.length}px)`,
-          left: `calc(${(idx * 100) / LOCALES.length}% + 4px)`,
+          // p-1 (4px) each side → track = 100% − 8px; equal-width buttons
+          width: `calc((100% - 8px) / ${LOCALES.length})`,
+          left: `calc(4px + ${idx} * (100% - 8px) / ${LOCALES.length})`,
           background: "linear-gradient(135deg,rgba(124,92,255,.85),rgba(79,140,255,.85))",
         }}
       />
@@ -72,7 +74,7 @@ function LangSwitcher() {
           key={l.code}
           onClick={() => setLocale(l.code as Locale)}
           title={l.label}
-          className="relative z-10 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] font-bold transition-colors"
+          className="relative z-10 w-11 sm:w-12 py-2 rounded-xl text-center text-[11px] font-bold leading-none whitespace-nowrap transition-colors"
           style={{ color: l.code === locale ? "#fff" : "var(--ink-3)" }}
         >
           {l.short}
@@ -129,7 +131,7 @@ function Navbar({
         style={{ maxHeight: scrolled ? 0 : 34, opacity: scrolled ? 0 : 1 }}
       >
         <div
-          className="flex items-center justify-center px-4 py-2 text-[11px] tracking-[0.16em] uppercase"
+          className="flex items-center justify-center truncate whitespace-nowrap px-3 py-2 text-[10px] tracking-[0.08em] uppercase sm:px-4 sm:text-[11px] sm:tracking-[0.16em]"
           style={{ color: "#d9d2c8" }}
         >
           {t.bar}
@@ -144,9 +146,9 @@ function Navbar({
           </span>
         </a>
 
-        <div className="hidden lg:flex items-center gap-0.5">
+        <div className="hidden lg:flex items-center gap-0.5 xl:gap-1">
           {nav.map((l) => (
-            <a key={l.href} href={l.href} className="navlink">
+            <a key={l.href} href={l.href} className="navlink whitespace-nowrap">
               {l.label}
             </a>
           ))}
@@ -164,16 +166,21 @@ function Navbar({
               onLogout={onLogout}
             />
           ) : (
-            <button onClick={onLogin} className="btn btn-ghost !py-2.5 !px-3.5 text-sm hidden sm:inline-flex">
+            <button onClick={onLogin} className="btn btn-ghost !py-2.5 !px-3.5 text-sm whitespace-nowrap hidden sm:inline-flex">
               <UserIcon className="w-4 h-4" />
               {t.auth.login}
             </button>
           )}
-          <button onClick={onTrack} className="btn btn-ghost !py-2.5 !px-3 text-sm hidden md:inline-flex">
+          <button
+            onClick={onTrack}
+            title={t.track.chip}
+            aria-label={t.track.chip}
+            className="btn btn-ghost !py-2.5 !px-3 text-sm whitespace-nowrap hidden md:inline-flex"
+          >
             <Search className="w-4 h-4" />
-            {t.track.chip}
+            <span className="hidden xl:inline">{t.track.chip}</span>
           </button>
-          <a href="#catalog" className="btn btn-primary !py-2.5 !px-4 text-sm hidden md:inline-flex">
+          <a href="#catalog" className="btn btn-primary !py-2.5 !px-4 text-sm whitespace-nowrap hidden lg:inline-flex">
             {t.catalog.buy}
           </a>
           <button
@@ -204,7 +211,7 @@ function Navbar({
             key={l.href}
             href={l.href}
             onClick={() => setOpen(false)}
-            className="ff-d text-xl sm:text-2xl text-white/90 uppercase text-center"
+            className="ff-d px-4 py-2.5 text-xl sm:text-2xl text-white/90 uppercase text-center"
             style={{ fontWeight: 700 }}
           >
             {l.label}
@@ -303,18 +310,15 @@ function Hero({ products, onBuy }: { products: ProductRow[]; onBuy: (p: ProductR
   };
 
   return (
-    <section id="top" className="relative flex items-center pt-32 sm:pt-36 pb-16 lg:min-h-screen lg:pb-24 overflow-hidden">
+    <section id="top" className="relative flex items-center pt-28 sm:pt-32 lg:pt-36 pb-14 sm:pb-16 lg:min-h-screen lg:pb-24 overflow-hidden">
       <div className="hero-grid" aria-hidden="true" />
       <div className="hero-beams" aria-hidden="true" />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[1.05fr_0.95fr] gap-14 items-center w-full">
-        <div>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-[1.1fr_0.9fr] gap-10 lg:gap-12 xl:gap-16 items-center w-full">
+        <div className="min-w-0">
           <Reveal>
             <span className="chip">
-              <span className="relative flex w-2 h-2">
-                <span className="pulse-dot absolute w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              </span>
+              <span className="online-dot" aria-hidden="true" />
               {t.hero.badge}
             </span>
           </Reveal>
@@ -332,18 +336,18 @@ function Hero({ products, onBuy }: { products: ProductRow[]; onBuy: (p: ProductR
           </h1>
 
           <Reveal delay={420}>
-            <p className="mt-7 max-w-xl text-sm sm:text-base leading-relaxed" style={{ color: "var(--ink-2)" }}>
+            <p className="mt-6 sm:mt-7 max-w-xl text-sm sm:text-base leading-relaxed" style={{ color: "var(--ink-2)" }}>
               {t.hero.sub}
             </p>
           </Reveal>
 
           <Reveal delay={500}>
-            <div className="mt-9 flex flex-wrap items-center gap-3 sm:gap-4">
-              <a href="#catalog" className="btn btn-primary text-sm sm:text-base !px-7 sm:!px-8 !py-4">
+            <div className="mt-9 grid grid-cols-[1fr_auto] items-center gap-3 sm:flex sm:flex-wrap sm:gap-4">
+              <a href="#catalog" className="btn btn-primary text-sm sm:text-base !px-5 sm:!px-8 !py-4">
                 {t.hero.cta1}
                 <ArrowRight className="w-4 h-4" />
               </a>
-              <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" className="btn btn-ghost text-sm sm:text-base !px-6 !py-4">
+              <a href={TELEGRAM_URL} target="_blank" rel="noreferrer" className="btn btn-ghost text-sm sm:text-base !px-5 sm:!px-6 !py-4">
                 <Telegram className="w-4 h-4 text-sky-300" />
                 {t.hero.cta2}
               </a>
@@ -362,7 +366,7 @@ function Hero({ products, onBuy }: { products: ProductRow[]; onBuy: (p: ProductR
         </div>
 
         <div
-          className="relative"
+          className="relative mx-auto w-full max-w-[440px] lg:mx-0 lg:max-w-none xl:ml-auto xl:max-w-[460px]"
           onMouseEnter={() => setHold(true)}
           onMouseLeave={() => setHold(false)}
           onFocus={() => setHold(true)}
@@ -528,6 +532,21 @@ function Catalog({
 }) {
   const { t } = useI18n();
   const [q, setQ] = useState("");
+  const rail = useRef<HTMLDivElement>(null);
+  const [slide, setSlide] = useState(0);
+
+  const onRailScroll = () => {
+    const el = rail.current;
+    const first = el?.firstElementChild as HTMLElement | null;
+    if (!el || !first) return;
+    const step = first.getBoundingClientRect().width + 12;
+    setSlide(Math.round(el.scrollLeft / step));
+  };
+  const goTo = (i: number) => {
+    const el = rail.current;
+    const card = el?.children[i] as HTMLElement | undefined;
+    if (el && card) el.scrollTo({ left: card.offsetLeft - 16, behavior: "smooth" });
+  };
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -547,7 +566,7 @@ function Catalog({
     <section id="catalog" className="relative py-20 sm:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
-          <div>
+          <div className="min-w-0">
             <Reveal>
               <span className="chip">
                 <Sparkle className="w-3 h-3" style={{ color: "var(--violet)" }} /> {t.catalog.chip}
@@ -562,7 +581,7 @@ function Catalog({
             </Reveal>
           </div>
           <Reveal delay={150}>
-            <div className="relative w-full md:w-72">
+            <div className="relative w-full min-w-0 md:w-56 md:shrink-0 lg:w-72">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: "var(--ink-3)" }} />
               <input
                 value={q}
@@ -575,7 +594,12 @@ function Catalog({
           </Reveal>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6">
+        <div
+          ref={rail}
+          onScroll={onRailScroll}
+          className="cat-rail md:grid md:grid-cols-2 md:gap-5 lg:gap-6 2xl:grid-cols-4"
+          aria-roledescription="carousel"
+        >
           {filtered.map((p, i) => {
             const pd = t.products[p.slug as keyof typeof t.products];
             if (!pd) return null;
@@ -644,6 +668,22 @@ function Catalog({
             );
           })}
         </div>
+
+        {filtered.length > 1 && (
+          <div className="mt-4 flex items-center justify-center gap-2 md:hidden" aria-hidden="true">
+            {filtered.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                tabIndex={-1}
+                onClick={() => goTo(i)}
+                className="flex h-6 items-center px-0.5"
+              >
+                <span className={`rail-dot ${i === Math.min(slide, filtered.length - 1) ? "is-on" : ""}`} />
+              </button>
+            ))}
+          </div>
+        )}
 
         {filtered.length === 0 && (
           <p className="text-center py-12 text-sm" style={{ color: "var(--ink-3)" }}>
@@ -773,10 +813,10 @@ function How() {
           </Reveal>
         </div>
 
-        <div className="relative grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="relative grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-5">
           <div
             aria-hidden="true"
-            className="hidden lg:block absolute top-[52px] left-[12%] right-[12%] h-px"
+            className="hidden xl:block absolute top-[52px] left-[12%] right-[12%] h-px"
             style={{
               background:
                 "linear-gradient(90deg,transparent,rgba(124,92,255,.5),rgba(79,140,255,.5),rgba(47,230,167,.5),transparent)",
@@ -1168,33 +1208,12 @@ function Cta() {
   );
 }
 
-function StickyBuy({ product, onBuy }: { product?: ProductRow; onBuy: (p: ProductRow) => void }) {
-  const { t } = useI18n();
-  if (!product) return null;
-  const name = t.products[product.slug as keyof typeof t.products]?.name ?? product.slug;
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t p-3 md:hidden" style={{ background: "rgba(12,12,15,.94)", borderColor: "var(--line)", backdropFilter: "blur(16px)" }}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold text-white">{name}</div>
-          <div className="ff-d text-sm text-white/80">{fmtRub(product.priceCents)}</div>
-        </div>
-        <button onClick={() => onBuy(product)} className="btn btn-primary !py-3 !px-5 text-sm shrink-0">
-          {t.catalog.buy}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Footer() {
+function Footer({ onTrack }: { onTrack: () => void }) {
   const { t } = useI18n();
   const nav = [
     { href: "#catalog", label: t.nav.catalog },
-    { href: "#compare", label: t.nav.compare },
     { href: "#how", label: t.nav.how },
-    { href: "#why", label: t.nav.why },
-    { href: "#track", label: t.track.chip },
+    { href: "#faq", label: t.nav.faq },
     { href: "#top", label: t.footer.top },
   ];
   return (
@@ -1223,14 +1242,19 @@ function Footer() {
             <div className="text-[10px] font-bold uppercase tracking-[0.2em] mb-4" style={{ color: "var(--ink-3)" }}>
               {t.footer.nav}
             </div>
-            <ul className="space-y-2.5 text-[13px]">
+            <ul className="grid grid-cols-2 gap-x-6 text-[14px] md:block md:space-y-1 md:text-[13px]">
               {nav.map((l) => (
                 <li key={l.href}>
-                  <a href={l.href} className="transition-colors hover:text-white" style={{ color: "var(--ink-2)" }}>
+                  <a href={l.href} className="inline-block py-2 transition-colors hover:text-white md:py-1" style={{ color: "var(--ink-2)" }}>
                     {l.label}
                   </a>
                 </li>
               ))}
+              <li>
+                <button type="button" onClick={onTrack} className="py-2 text-left transition-colors hover:text-white md:py-1" style={{ color: "var(--ink-2)" }}>
+                  {t.track.chip}
+                </button>
+              </li>
             </ul>
           </div>
           <div>
@@ -1246,10 +1270,7 @@ function Footer() {
               <Telegram className="w-4 h-4 text-sky-300" /> @livkamarket
             </a>
             <div className="mt-4 flex items-center gap-2 text-[11px]" style={{ color: "var(--ink-3)" }}>
-              <span className="relative flex w-2 h-2">
-                <span className="pulse-dot absolute w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              </span>
+              <span className="online-dot" aria-hidden="true" />
               {t.footer.online}
             </div>
           </div>
@@ -1377,8 +1398,21 @@ export default function Site({
     setUser(null);
   };
 
+  const openTrack = () => setTrackOpen(true);
+
+  useEffect(() => {
+    if (!trackOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setTrackOpen(false);
+    document.documentElement.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.documentElement.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [trackOpen]);
+
   return (
-    <main className="pb-[88px] md:pb-0">
+    <main className="pb-[calc(76px+env(safe-area-inset-bottom))] md:pb-0">
       <ScrollProgress />
       <PageGlow />
       <Navbar
@@ -1387,18 +1421,15 @@ export default function Site({
         onOrders={() => setOrdersOpen(true)}
         onProfile={() => setProfileOpen(true)}
         onLogout={logout}
-        onTrack={() => {
-          document.getElementById("track-modal")?.setAttribute("data-open", "1");
-          setTrackOpen(true);
-        }}
+        onTrack={openTrack}
       />
       <Hero products={products} onBuy={handleBuy} />
       <Catalog products={products} onBuy={handleBuy} />
       <How />
       <Faq />
       <Cta />
-      <Footer />
-      <StickyBuy product={products[0]} onBuy={handleBuy} />
+      <Footer onTrack={openTrack} />
+      <MobileTabBar user={user} onLogin={() => openAuth()} onProfile={() => setProfileOpen(true)} onTrack={openTrack} />
 
       <AuthModal
         open={authOpen}
@@ -1437,14 +1468,28 @@ export default function Site({
         }}
       />
       {trackOpen && (
-        <div className="fixed inset-0 z-[104] overflow-y-auto" style={{ background: "rgba(5,5,8,.78)" }} onClick={() => setTrackOpen(false)}>
-          <div className="mx-auto max-w-3xl px-4 py-16" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex justify-end">
-              <button onClick={() => setTrackOpen(false)} className="btn btn-ghost !py-2 !px-3 text-sm">
+        <div
+          className="modal-backdrop fixed inset-0 z-[104] overflow-y-auto overscroll-contain"
+          style={{ background: "rgba(5,5,8,.78)" }}
+          onClick={() => setTrackOpen(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="mx-auto max-w-3xl px-4 pb-10 pt-[max(16px,env(safe-area-inset-top))] sm:py-16">
+            <div className="sticky top-3 z-10 mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setTrackOpen(false)}
+                aria-label="close"
+                className="btn btn-ghost !h-11 !w-11 !p-0 text-sm"
+                style={{ background: "rgba(20,20,24,.85)" }}
+              >
                 <XIcon className="h-4 w-4" />
               </button>
             </div>
-            <TrackOrder />
+            <div className="modal-surface rounded-[28px] p-1" onClick={(e) => e.stopPropagation()}>
+              <TrackOrder />
+            </div>
           </div>
         </div>
       )}

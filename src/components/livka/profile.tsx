@@ -154,12 +154,12 @@ export function ProfileModal({
 
   return (
     <div
-      className="fixed inset-0 z-[112] flex items-center justify-center p-3 sm:p-4"
+      className="modal-backdrop fixed inset-0 z-[112] flex items-center justify-center p-3 sm:p-4"
       style={{ background: "rgba(5,5,11,.9)", backdropFilter: "blur(18px)" }}
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg glass p-6 sm:p-7 modal-in max-h-[92vh] overflow-y-auto"
+        className="modal-surface relative w-full max-w-lg p-6 sm:p-7 modal-in max-h-[92vh] overflow-y-auto"
         style={{ borderRadius: 28 }}
         onClick={(e) => e.stopPropagation()}
       >

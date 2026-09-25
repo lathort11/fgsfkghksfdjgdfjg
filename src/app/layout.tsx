@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Unbounded, Onest, Noto_Sans_SC } from "next/font/google";
 import "./globals.css";
@@ -23,6 +23,14 @@ const cjk = Noto_Sans_SC({
   variable: "--font-sc",
   display: "swap",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#070708",
+  colorScheme: "dark",
+};
 
 export const metadata: Metadata = {
   title: "LIVKAMARKET — Флагманский маркет AI подписок | Gemini Pro, ChatGPT Pro, SuperGrok",

@@ -178,7 +178,7 @@ body.cursor-hover .cursor-ring {
 .d1 {
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 900;
-  font-size: clamp(2.8rem, 7.5vw, 6.2rem);
+  font-size: clamp(2.2rem, 0.6rem + 5.6vw, 5.6rem);
   line-height: 0.98;
   letter-spacing: -0.02em;
   text-transform: uppercase;
@@ -188,7 +188,7 @@ body.cursor-hover .cursor-ring {
 .d2 {
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 800;
-  font-size: clamp(2rem, 4.8vw, 3.6rem);
+  font-size: clamp(1.45rem, 0.5rem + 3.2vw, 3.4rem);
   line-height: 1.05;
   letter-spacing: -0.015em;
   text-transform: uppercase;
@@ -249,9 +249,15 @@ body.cursor-hover .cursor-ring {
 }
 
 /* ═══════════════════════ BUTTONS ═══════════════════════ */
+/* `display` lives in the components layer so Tailwind utilities such as
+   `hidden sm:inline-flex` can override it (unlayered CSS beats every layer). */
+@layer components {
+  .btn {
+    display: inline-flex;
+  }
+}
 .btn {
   position: relative;
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
@@ -460,22 +466,6 @@ body.cursor-hover .cursor-ring {
   50% { transform: translateY(-16px) rotate(var(--rot, 0deg)); }
 }
 
-.pulse-dot {
-  position: relative;
-}
-.pulse-dot::before {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  background: rgba(16, 185, 129, 0.45);
-  animation: pulse-ring 2s ease-out infinite;
-}
-@keyframes pulse-ring {
-  0% { transform: scale(0.6); opacity: 1; }
-  100% { transform: scale(1.8); opacity: 0; }
-}
-
 /* ═══════════════════════ MARQUEE ═══════════════════════ */
 .marquee {
   overflow: hidden;
@@ -579,6 +569,7 @@ body.cursor-hover .cursor-ring {
 /* ═════════════ WORD REVEAL ═════════════ */
 .rw {
   display: inline-block;
+  max-width: 100%;
   overflow: hidden;
   vertical-align: bottom;
   padding-bottom: 0.06em;
@@ -586,7 +577,10 @@ body.cursor-hover .cursor-ring {
 }
 .rw > i {
   display: inline-block;
+  max-width: 100%;
   font-style: inherit;
+  white-space: normal;
+  overflow-wrap: normal;
   transform: translateY(108%);
   animation: rw-up 1s var(--ease) forwards;
 }
@@ -1121,8 +1115,322 @@ input::placeholder {
 }
 
 /* Long single words ("компромиссов.") must fit a 360–420px screen. */
-@media (max-width: 420px) {
+
+
+/* ═══════════════════════ MOBILE ═══════════════════════ */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+a,
+button,
+[role="tab"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  /* iOS Safari zooms into any field below 16px on focus. */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Hover lifts stick after a tap on touch screens. */
+@media (hover: none) {
+  .pcard:hover,
+  .btn-ghost:hover,
+  .btn-primary:hover,
+  .btn-ink:hover {
+    transform: none;
+  }
+}
+
+/* Catalog rail: horizontal swipe with snap on phones, grid from md. */
+@media (max-width: 767px) {
+  .cat-rail {
+    display: flex;
+    gap: 12px;
+    margin-inline: -16px;
+    padding: 4px 16px 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+  }
+  .cat-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .cat-rail > * {
+    flex: 0 0 86%;
+    scroll-snap-align: start;
+  }
+  .cat-rail > .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+.rail-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(244, 241, 234, 0.22);
+  transition: width 0.35s var(--ease), background 0.35s;
+}
+.rail-dot.is-on {
+  width: 22px;
+  background: var(--ink);
+}
+
+/* Bottom tab bar (thumb zone), phones only. */
+.tabbar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: rgba(10, 10, 13, 0.86);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.tabbar-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 52px;
+  border-radius: 16px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink-3);
+  transition: color 0.25s;
+}
+.tabbar-item.is-on {
+  color: #fff;
+}
+.tabbar-pill {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  transition: background 0.3s var(--ease);
+}
+.tabbar-item.is-on .tabbar-pill {
+  background: rgba(139, 124, 255, 0.22);
+}
+.tabbar-item:active .tabbar-pill {
+  transform: scale(0.92);
+}
+.tabbar-avatar {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #7c5cff, #4f8cff);
+}
+@media (min-width: 768px) {
+  .tabbar {
+    display: none;
+  }
+}
+
+/* ═══════════════════════ BREAKPOINT POLISH ═══════════════════════
+   320–420  small phones · 421–767 phones · 768–1023 tablets
+   1024–1279 laptops · 1280+ desktops · 1536+ wide */
+
+/* Small phones: keep every horizontal element inside 320px. */
+@media (max-width: 360px) {
+  .d1 {
+    font-size: 2.2rem;
+    letter-spacing: -0.03em;
+  }
   .d2 {
-    font-size: min(8vw, 2.25rem);
+    font-size: 1.45rem;
+    letter-spacing: -0.03em;
+  }
+  .chip {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding-inline: 10px;
+  }
+  .hero-tab {
+    font-size: 10px;
+    gap: 5px;
+    padding: 8px 3px 9px;
+  }
+  .hero-tab .art-tile {
+    --tile: 24px !important;
+  }
+  .hero-tab > .truncate {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.15;
+  }
+  .cat-rail > * {
+    flex-basis: 90%;
+  }
+  .tabbar-item {
+    font-size: 10px;
+  }
+}
+
+/* Tablets: hero art scaled for the 440px card, catalog cards a bit denser. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hero-art,
+  .hero-art .art-tile {
+    --tile: 104px !important;
+  }
+  .pcard-art,
+  .pcard-art .art-tile {
+    --tile: 72px !important;
+  }
+  .pcard-art {
+    aspect-ratio: 16 / 8;
+  }
+}
+
+/* Laptops: two hero columns on ~1024px need smaller art + type. */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .d1 {
+    font-size: clamp(3.6rem, 6.4vw, 4.4rem);
+  }
+  .hero-art,
+  .hero-art .art-tile {
+    --tile: 96px !important;
+  }
+  .hero-tab {
+    font-size: 10.5px;
+  }
+  .navlink {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.84rem;
+  }
+}
+
+/* Desktops: hero card capped so the whole hero fits a 900px-tall viewport. */
+@media (min-width: 1280px) {
+  .hero-art,
+  .hero-art .art-tile {
+    --tile: 104px !important;
+  }
+  .hero-art {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* Wide screens: four catalog columns need a smaller art panel. */
+@media (min-width: 1536px) {
+  .pcard-art {
+    aspect-ratio: 16 / 9;
+  }
+  .pcard-art,
+  .pcard-art .art-tile {
+    --tile: 76px !important;
+  }
+}
+
+/* Short landscape phones: don't force a full-height hero. */
+@media (max-height: 520px) and (orientation: landscape) {
+  section#top {
+    min-height: 0;
+    padding-top: 6rem;
+  }
+}
+
+/* ═════════════ ONLINE DOT — a single true circle ═════════════ */
+.online-dot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #34d399;
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.18);
+}
+.online-dot::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 9999px;
+  background: rgba(52, 211, 153, 0.55);
+  animation: online-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes online-ping {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .online-dot::after { animation: none; opacity: 0; }
+}
+
+
+/* ═════════════ MODAL SURFACES ═════════════
+   main > div:nth-of-type(3) is whichever modal is currently open. The old
+   `.glass` panel was translucent, so text/photography from the page showed
+   through and visually merged with it. This is a real opaque card. */
+.modal-surface {
+  isolation: isolate;
+  background:
+    radial-gradient(80% 55% at 18% 0%, rgba(139, 124, 255, 0.12), transparent 68%),
+    linear-gradient(165deg, #18181e 0%, #111116 55%, #0e0e12 100%) !important;
+  border: 1px solid rgba(244, 241, 234, 0.16) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 36px 100px -24px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(0, 0, 0, 0.45);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.modal-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.035), transparent 32%);
+}
+.drawer-surface {
+  isolation: isolate;
+  background:
+    radial-gradient(90% 45% at 50% 0%, rgba(139, 124, 255, 0.1), transparent 70%),
+    #111116 !important;
+  border-left: 1px solid rgba(244, 241, 234, 0.14) !important;
+  box-shadow: -32px 0 90px -34px rgba(0, 0, 0, 0.95);
+}
+.modal-backdrop {
+  background: rgba(3, 3, 6, 0.84) !important;
+  backdrop-filter: blur(10px) saturate(80%);
+  -webkit-backdrop-filter: blur(10px) saturate(80%);
+}
+@media (max-width: 639px) {
+  .modal-surface {
+    border-radius: 24px !important;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.09) inset,
+      0 24px 70px -20px rgba(0, 0, 0, 0.98),
+      0 0 0 1px rgba(0, 0, 0, 0.5);
   }
 }

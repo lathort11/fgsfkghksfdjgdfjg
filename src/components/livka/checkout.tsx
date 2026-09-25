@@ -202,12 +202,12 @@ export function CheckoutModal({
 
   return (
     <div
-      className="fixed inset-0 z-[105] flex justify-end"
+      className="modal-backdrop fixed inset-0 z-[105] flex justify-end"
       style={{ background: "rgba(5,5,8,.72)" }}
       onClick={onClose}
     >
       <div
-        className="drawer-panel relative w-full max-w-[440px] overflow-y-auto p-6 sm:p-7"
+        className="drawer-surface drawer-panel relative w-full max-w-[440px] overflow-y-auto p-6 sm:p-7"
         style={{ background: "#0c0c0f", borderLeft: "1px solid var(--line)" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -622,8 +622,8 @@ export function MyOrdersModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[106] flex justify-end" style={{ background: "rgba(5,5,8,.72)" }} onClick={onClose}>
-      <div className="drawer-panel w-full max-w-md overflow-y-auto p-6" style={{ background: "#0d0d10" }} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop fixed inset-0 z-[106] flex justify-end" style={{ background: "rgba(5,5,8,.72)" }} onClick={onClose}>
+      <div className="drawer-surface drawer-panel w-full max-w-md overflow-y-auto p-6" style={{ background: "#0d0d10" }} onClick={(e) => e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <h3 className="ff-d text-lg text-white">{t.checkout.myOrdersTitle}</h3>
           <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full" style={{ border: "1px solid var(--line)" }}>
