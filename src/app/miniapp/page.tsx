@@ -34,7 +34,7 @@ const MINIAPP_NETWORKS = ["usdt-trc20", "ton"];
 
 function parseMode(v: string | string[] | undefined): MiniAppMode {
   const m = Array.isArray(v) ? v[0] : v;
-  return m === "verify" || m === "market" ? m : "auto";
+  return m === "market" ? "market" : "verify";
 }
 
 export default async function MiniAppPage({
