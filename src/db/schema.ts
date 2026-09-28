@@ -1,6 +1,7 @@
 import {
-  pgTable, uuid, text, timestamp, integer, pgEnum, boolean, jsonb,
+  pgTable, uuid, text, timestamp, integer, pgEnum, boolean, jsonb, uniqueIndex, index, check, pgSequence, serial,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const orderStatusEnum = pgEnum("order_status", [
   "awaiting_payment",
@@ -16,15 +17,24 @@ export const orderStatusEnum = pgEnum("order_status", [
  */
 export const users = pgTable("site_users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  // Public support identifier. Internal APIs continue using the UUID above.
+  customerNo: serial("customer_no").notNull().unique(),
   email: text("email").notNull().unique(),
   // Nullable: users who signed in only through Telegram have no password.
   passwordHash: text("password_hash"),
   name: text("name").notNull(),
+  role: text("role", { enum: ["user", "admin"] }).notNull().default("user"),
+  status: text("status", { enum: ["active", "banned"] }).notNull().default("active"),
+  bannedAt: timestamp("banned_at", { withTimezone: true }),
+  banReason: text("ban_reason"),
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),
   avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  check("site_user_role_valid", sql`${t.role} IN ('user', 'admin')`),
+  check("site_user_status_valid", sql`${t.status} IN ('active', 'banned')`),
+]);
 
 export const sessions = pgTable("site_sessions", {
   token: text("token").primaryKey(),
@@ -76,3 +86,95 @@ export const orders = pgTable("orders", {
 export type User = typeof users.$inferSelect;
 export type ProductRow = typeof products.$inferSelect;
 export type OrderRow = typeof orders.$inferSelect;
+
+/* Each user has separate demo and live accounts. Money is integer kopecks. */
+export const wallets = pgTable("site_wallets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  mode: text("mode", { enum: ["demo", "live"] }).notNull(),
+  balanceCents: integer("balance_cents").notNull().default(0),
+  heldCents: integer("held_cents").notNull().default(0),
+  verification: text("verification", { enum: ["unverified", "verified", "blocked"] }).notNull().default("unverified"),
+  verificationReference: text("verification_reference"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("site_wallet_user_mode").on(t.userId, t.mode),
+  check("site_wallet_balance_nonnegative", sql`${t.balanceCents} >= 0 AND ${t.balanceCents} <= 100000000`),
+  check("site_wallet_held_nonnegative", sql`${t.heldCents} >= 0`),
+  check("site_wallet_mode_valid", sql`${t.mode} IN ('demo', 'live')`),
+]);
+
+export const walletOperations = pgTable("site_wallet_operations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  walletId: uuid("wallet_id").notNull().references(() => wallets.id),
+  kind: text("kind", { enum: ["deposit", "purchase", "withdrawal", "adjustment"] }).notNull(),
+  status: text("status", { enum: ["pending", "processing", "completed", "cancelled", "rejected", "expired"] }).notNull().default("pending"),
+  amountCents: integer("amount_cents").notNull(),
+  feeCents: integer("fee_cents").notNull().default(0),
+  idempotencyKey: text("idempotency_key").notNull(),
+  description: text("description").notNull(),
+  method: text("method").notNull(),
+  address: text("address"),
+  externalId: text("external_id").unique(),
+  paymentUrl: text("payment_url"),
+  reference: text("reference"),
+  orderId: uuid("order_id").references(() => orders.id),
+  productId: uuid("product_id").references(() => products.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (t) => [
+  uniqueIndex("site_wallet_idempotency").on(t.walletId, t.idempotencyKey),
+  uniqueIndex("site_wallet_unique_payout_reference").on(t.reference).where(sql`${t.kind} = 'withdrawal' AND ${t.status} = 'completed'`),
+  index("site_wallet_history").on(t.walletId, t.createdAt),
+  check("site_wallet_operation_amount", sql`${t.amountCents} > 0 AND ${t.feeCents} >= 0 AND ${t.feeCents} < ${t.amountCents}`),
+]);
+
+/* Append-only journal: cancellation writes a reversal, never erases a debit. */
+export const walletEntries = pgTable("site_wallet_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  walletId: uuid("wallet_id").notNull().references(() => wallets.id),
+  operationId: uuid("operation_id").notNull().references(() => walletOperations.id),
+  event: text("event").notNull(),
+  deltaCents: integer("delta_cents").notNull(),
+  deltaHeldCents: integer("delta_held_cents").notNull().default(0),
+  balanceAfterCents: integer("balance_after_cents").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("site_wallet_entry_once").on(t.operationId, t.event)]);
+
+export const inventory = pgTable("site_inventory", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  productId: uuid("product_id").notNull().references(() => products.id),
+  credentials: text("credentials").notNull(),
+  orderId: uuid("order_id").unique().references(() => orders.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("site_inventory_available").on(t.productId, t.orderId)]);
+
+export const walletAudit = pgTable("site_wallet_audit", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actor: text("actor").notNull(),
+  action: text("action").notNull(),
+  walletId: uuid("wallet_id").references(() => wallets.id),
+  details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const adminAudit = pgTable("site_admin_audit", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actorUserId: uuid("actor_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "restrict" }),
+  action: text("action").notNull(),
+  details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("site_admin_audit_created").on(t.createdAt),
+  index("site_admin_audit_target").on(t.targetUserId, t.createdAt),
+]);
+
+export const walletOrderNumber = pgSequence("site_order_number", { startWith: 1000000 });
+
+export const walletRateLimits = pgTable("site_wallet_rate_limits", {
+  key: text("key").primaryKey(),
+  hits: integer("hits").notNull().default(1),
+  windowAt: timestamp("window_at", { withTimezone: true }).notNull().defaultNow(),
+});
+

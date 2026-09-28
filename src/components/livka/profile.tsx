@@ -196,7 +196,12 @@ export function ProfileModal({
             <div className="ff-d text-lg font-bold text-white truncate" style={{ fontWeight: 700 }}>
               {user.name}
             </div>
-            <div className="text-[11px] truncate mt-0.5" style={{ color: "var(--ink-3)" }}>
+            {user.customerId && (
+              <div className="mt-1 inline-flex rounded-md px-2 py-0.5 font-mono text-[10px] tracking-[0.08em]" style={{ color: "#c9aaf4", background: "rgba(124,92,255,.12)", border: "1px solid rgba(124,92,255,.22)" }}>
+                ID {user.customerId}
+              </div>
+            )}
+            <div className="text-[11px] truncate mt-1" style={{ color: "var(--ink-3)" }}>
               {user.telegramId
                 ? `Telegram${user.telegramUsername ? ` · @${user.telegramUsername}` : ` · ID ${user.telegramId}`}`
                 : user.email}

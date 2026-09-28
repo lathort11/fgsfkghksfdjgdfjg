@@ -104,6 +104,58 @@ const ru = {
         "Гарантия 30 дней",
       ],
     },
+    "chatgpt-plus-4": {
+      name: "ChatGPT Plus · 4 пользователя",
+      tagline: "Общий доступ Plus для 4 человек",
+      badge: "4 пользователя",
+      description:
+        "Подписка ChatGPT Plus с доступом для четырёх человек: актуальные модели OpenAI, генерация изображений, голосовой режим и работа с файлами.",
+      features: [
+        "Доступ для 4 пользователей",
+        "Актуальные модели OpenAI",
+        "Изображения, голос и файлы",
+        "Гарантия 30 дней",
+      ],
+    },
+    "chatgpt-plus-8": {
+      name: "ChatGPT Plus · 8 пользователей",
+      tagline: "Общий доступ Plus для 8 человек",
+      badge: "8 пользователей",
+      description:
+        "Подписка ChatGPT Plus с доступом для восьми человек — для команды или семьи: актуальные модели OpenAI, изображения, голосовой режим и файлы.",
+      features: [
+        "Доступ для 8 пользователей",
+        "Актуальные модели OpenAI",
+        "Изображения, голос и файлы",
+        "Гарантия 30 дней",
+      ],
+    },
+    "chatgpt-pro-4": {
+      name: "ChatGPT Pro · 4 пользователя",
+      tagline: "Максимальный тариф OpenAI для 4 человек",
+      badge: "4 пользователя",
+      description:
+        "Максимальная подписка ChatGPT Pro с доступом для четырёх человек: самые мощные модели, расширенные лимиты, Sora и ранний доступ к новым функциям.",
+      features: [
+        "Доступ для 4 пользователей",
+        "Самые мощные модели OpenAI",
+        "Расширенные лимиты и Sora",
+        "Гарантия 30 дней",
+      ],
+    },
+    "chatgpt-pro-8": {
+      name: "ChatGPT Pro · 8 пользователей",
+      tagline: "Максимальный тариф OpenAI для 8 человек",
+      badge: "8 пользователей",
+      description:
+        "Максимальная подписка ChatGPT Pro с доступом для восьми человек: самые мощные модели, расширенные лимиты, Sora и ранний доступ к новым функциям.",
+      features: [
+        "Доступ для 8 пользователей",
+        "Самые мощные модели OpenAI",
+        "Расширенные лимиты и Sora",
+        "Гарантия 30 дней",
+      ],
+    },
     supergrok: {
       name: "SuperGrok",
       tagline: "Топовая подписка xAI",
@@ -434,6 +486,58 @@ const en: Dict = {
         "30-day warranty",
       ],
     },
+    "chatgpt-plus-4": {
+      name: "ChatGPT Plus · 4 users",
+      tagline: "Shared Plus access for 4 people",
+      badge: "4 users",
+      description:
+        "ChatGPT Plus for four people: the latest OpenAI models, image generation, voice mode and file uploads.",
+      features: [
+        "Access for 4 users",
+        "Latest OpenAI models",
+        "Images, voice and files",
+        "30-day warranty",
+      ],
+    },
+    "chatgpt-plus-8": {
+      name: "ChatGPT Plus · 8 users",
+      tagline: "Shared Plus access for 8 people",
+      badge: "8 users",
+      description:
+        "ChatGPT Plus for eight people, ideal for a team or family: the latest OpenAI models, images, voice mode and files.",
+      features: [
+        "Access for 8 users",
+        "Latest OpenAI models",
+        "Images, voice and files",
+        "30-day warranty",
+      ],
+    },
+    "chatgpt-pro-4": {
+      name: "ChatGPT Pro · 4 users",
+      tagline: "OpenAI's top plan for 4 people",
+      badge: "4 users",
+      description:
+        "ChatGPT Pro, OpenAI's top subscription, for four people: the most capable models, extended limits, Sora and early access to new features.",
+      features: [
+        "Access for 4 users",
+        "Most capable OpenAI models",
+        "Extended limits and Sora",
+        "30-day warranty",
+      ],
+    },
+    "chatgpt-pro-8": {
+      name: "ChatGPT Pro · 8 users",
+      tagline: "OpenAI's top plan for 8 people",
+      badge: "8 users",
+      description:
+        "ChatGPT Pro, OpenAI's top subscription, for eight people: the most capable models, extended limits, Sora and early access to new features.",
+      features: [
+        "Access for 8 users",
+        "Most capable OpenAI models",
+        "Extended limits and Sora",
+        "30-day warranty",
+      ],
+    },
     supergrok: {
       name: "SuperGrok",
       tagline: "xAI's top subscription",
@@ -758,6 +862,58 @@ const zh: Dict = {
         "o-pro 与 GPT-4o 完整版",
         "Sora 与图像生成",
         "高峰时段无硬性限额",
+        "30 天保障",
+      ],
+    },
+    "chatgpt-plus-4": {
+      name: "ChatGPT Plus · 4 人",
+      tagline: "4 人共享 Plus 访问",
+      badge: "4 人",
+      description:
+        "支持四人使用的 ChatGPT Plus 订阅：最新 OpenAI 模型、图像生成、语音模式和文件处理。",
+      features: [
+        "支持 4 位用户",
+        "最新 OpenAI 模型",
+        "图像、语音和文件",
+        "30 天保障",
+      ],
+    },
+    "chatgpt-plus-8": {
+      name: "ChatGPT Plus · 8 人",
+      tagline: "8 人共享 Plus 访问",
+      badge: "8 人",
+      description:
+        "支持八人使用的 ChatGPT Plus 订阅，适合团队或家庭：最新 OpenAI 模型、图像、语音模式和文件。",
+      features: [
+        "支持 8 位用户",
+        "最新 OpenAI 模型",
+        "图像、语音和文件",
+        "30 天保障",
+      ],
+    },
+    "chatgpt-pro-4": {
+      name: "ChatGPT Pro · 4 人",
+      tagline: "OpenAI 顶级套餐 · 4 人",
+      badge: "4 人",
+      description:
+        "支持四人使用的 ChatGPT Pro 顶级订阅：最强模型、更高额度、Sora 以及新功能抢先体验。",
+      features: [
+        "支持 4 位用户",
+        "最强 OpenAI 模型",
+        "更高额度与 Sora",
+        "30 天保障",
+      ],
+    },
+    "chatgpt-pro-8": {
+      name: "ChatGPT Pro · 8 人",
+      tagline: "OpenAI 顶级套餐 · 8 人",
+      badge: "8 人",
+      description:
+        "支持八人使用的 ChatGPT Pro 顶级订阅：最强模型、更高额度、Sora 以及新功能抢先体验。",
+      features: [
+        "支持 8 位用户",
+        "最强 OpenAI 模型",
+        "更高额度与 Sora",
         "30 天保障",
       ],
     },

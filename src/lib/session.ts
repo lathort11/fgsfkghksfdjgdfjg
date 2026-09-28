@@ -9,8 +9,11 @@ const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 export type SafeUser = {
   id: string;
+  customerId: string;
   email: string;
   name: string;
+  role: "user" | "admin";
+  status: "active" | "banned";
   createdAt: string;
   telegramId: string | null;
   telegramUsername: string | null;
@@ -18,10 +21,17 @@ export type SafeUser = {
   hasPassword: boolean;
 };
 
+export function formatCustomerId(customerNo: number): string {
+  return `LVK-${String(customerNo).padStart(6, "0")}`;
+}
+
 const safeColumns = {
   id: users.id,
+  customerNo: users.customerNo,
   email: users.email,
   name: users.name,
+  role: users.role,
+  status: users.status,
   createdAt: users.createdAt,
   telegramId: users.telegramId,
   telegramUsername: users.telegramUsername,
@@ -31,14 +41,17 @@ const safeColumns = {
 
 type SafeRow = Pick<
   User,
-  "id" | "email" | "name" | "createdAt" | "telegramId" | "telegramUsername" | "avatarUrl" | "passwordHash"
+  "id" | "customerNo" | "email" | "name" | "role" | "status" | "createdAt" | "telegramId" | "telegramUsername" | "avatarUrl" | "passwordHash"
 >;
 
 export function toSafeUser(row: SafeRow): SafeUser {
   return {
     id: row.id,
+    customerId: formatCustomerId(row.customerNo),
     email: row.email,
     name: row.name,
+    role: row.role,
+    status: row.status,
     createdAt: row.createdAt.toISOString(),
     telegramId: row.telegramId,
     telegramUsername: row.telegramUsername,
@@ -48,10 +61,13 @@ export function toSafeUser(row: SafeRow): SafeUser {
 }
 
 /**
- * @param opts.crossSite  true inside the Telegram Mini App: Telegram Web runs
- *   the app in an iframe, where only `SameSite=None; Secure` cookies are sent.
+ * @param opts.crossSite true inside the Telegram Mini App: Telegram Web runs
+ * the app in an iframe, where only `SameSite=None; Secure` cookies are sent.
  */
 export async function createSession(userId: string, opts: { crossSite?: boolean } = {}): Promise<string> {
+  const [account] = await db.select({ status: users.status }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!account || account.status !== "active") throw new Error("ACCOUNT_BANNED");
+
   const token = newSessionToken();
   const expiresAt = new Date(Date.now() + THIRTY_DAYS);
   await db.insert(sessions).values({ token, userId, expiresAt });
@@ -70,9 +86,7 @@ export async function createSession(userId: string, opts: { crossSite?: boolean 
 export async function destroySession(): Promise<void> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (token) {
-    await db.delete(sessions).where(eq(sessions.token, token));
-  }
+  if (token) await db.delete(sessions).where(eq(sessions.token, token));
   jar.delete(SESSION_COOKIE);
 }
 
@@ -85,11 +99,10 @@ export async function getCurrentUser(): Promise<SafeUser | null> {
     .select(safeColumns)
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
-    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())))
+    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date()), eq(users.status, "active")))
     .limit(1);
 
-  const row = rows[0];
-  return row ? toSafeUser(row) : null;
+  return rows[0] ? toSafeUser(rows[0]) : null;
 }
 
 export async function getUserById(id: string): Promise<SafeUser | null> {
@@ -105,15 +118,9 @@ export type TelegramIdentity = {
   photoUrl?: string | null;
 };
 
-/**
- * Find the site user bound to a Telegram ID, or create one with the
- * placeholder e-mail `telegram_{id}@livkamarket.app`. Name, username and
- * avatar are refreshed from Telegram on every sign-in.
- */
+/** Find or create a site user bound to a Telegram ID. */
 export async function upsertTelegramUser(tg: TelegramIdentity): Promise<SafeUser> {
   const fullName = [tg.firstName, tg.lastName].filter(Boolean).join(" ").trim();
-  // Only overwrite what Telegram actually sent: partial identities (e.g. from
-  // the bot's /claim) must not wipe a stored name, username or avatar.
   const fresh: { name?: string; telegramUsername?: string; avatarUrl?: string } = {};
   if (fullName) fresh.name = fullName.slice(0, 64);
   if (tg.username) fresh.telegramUsername = tg.username;

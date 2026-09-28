@@ -28,7 +28,10 @@ export async function POST(req: Request) {
     const bot = await fetchBotProfile(res.user.id);
     return NextResponse.json({ ok: true, user, bot });
   } catch (e) {
-    console.error("[auth/telegram/webapp] ", e);
+    if (e instanceof Error && e.message === "ACCOUNT_BANNED") {
+      return NextResponse.json({ error: "ACCOUNT_BANNED" }, { status: 403 });
+    }
+    console.error("[auth/telegram/webapp] ", e instanceof Error ? e.name : "unknown");
     return NextResponse.json({ error: "SERVER" }, { status: 500 });
   }
 }

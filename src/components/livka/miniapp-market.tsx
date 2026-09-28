@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
 import { Check, KeyIcon, Receipt, Sparkle, UserIcon, Wallet, XIcon } from "@/components/livka/icons";
 import { fmtRub } from "@/components/livka/checkout";
+import { BalanceCheckout } from "@/components/livka/balance-checkout";
 import { ProductTile } from "@/components/livka/product-art";
 
 /* ═══════════ Types shared with the Mini App shell ═══════════ */
@@ -229,194 +230,14 @@ export function MiniAppMarket({
       </div>
 
       {buying && (
-        <QuickBuy
+        <BalanceCheckout
           product={buying}
-          networks={networks}
-          haptic={haptic}
-          c={c}
           onClose={() => setBuying(null)}
+          onOpenOrders={() => window.location.assign("/?section=purchases")}
+          onTopUp={(missing) => window.location.assign(`/?topup=${Math.max(100, Math.ceil(missing / 100))}`)}
         />
       )}
     </main>
   );
 }
 
-/* ═══════════ Quick Buy sheet: network → invoice + QR → tx hash → credentials ═══════════ */
-type Invoice = { secret: string; orderNo: number; amountCrypto: string; assetLabel: string; depositAddress: string; networkLabel: string; totalCents: number };
-type Delivered = { orderNo: number; credentials: string | null; sentToTelegram: boolean };
-
-function QuickBuy({
-  product,
-  networks,
-  haptic,
-  c,
-  onClose,
-}: {
-  product: MiniProduct;
-  networks: MiniNetwork[];
-  haptic: Haptic;
-  c: (typeof COPY)[keyof typeof COPY];
-  onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const [networkId, setNetworkId] = useState(networks[0]?.id ?? "");
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [tx, setTx] = useState("");
-  const [done, setDone] = useState<Delivered | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const name = t.products[product.slug as keyof typeof t.products]?.name ?? product.slug;
-
-  const create = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ productId: product.id, networkId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.order) throw new Error(data.error ?? "ERR");
-      setInvoice(data.order as Invoice);
-      haptic("success");
-    } catch {
-      setError(c.err);
-      haptic("error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const pay = async () => {
-    if (!invoice) return;
-    if (tx.trim().length < 8) {
-      setError(c.errTx);
-      haptic("warning");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/order/pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ secret: invoice.secret, txHash: tx.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.order) throw new Error(data.error ?? "ERR");
-      setDone({ orderNo: data.order.orderNo, credentials: data.order.credentials, sentToTelegram: !!data.sentToTelegram });
-      haptic("success");
-    } catch (e) {
-      setError(e instanceof Error && e.message === "BAD_TX" ? c.errTx : c.err);
-      haptic("error");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(0,0,0,.6)" }} onClick={onClose}>
-      <div
-        className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-3xl p-5 pb-8"
-        style={{ background: "#0d0f16", borderTop: "1px solid var(--line-2)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-[16px] font-bold text-white">{name}</div>
-            <div className="text-[13px]" style={{ color: "var(--ink-2)" }}>{fmtRub(invoice?.totalCents ?? product.priceCents)}</div>
-          </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-xl" style={card} aria-label={c.close}>
-            <XIcon className="h-4 w-4" />
-          </button>
-        </div>
-
-        {done ? (
-          <div className="mt-5">
-            <div className="flex items-center gap-2 text-[15px] font-semibold" style={{ color: "#34d399" }}>
-              <Check className="h-5 w-5" /> {c.delivered} · {c.order} #{done.orderNo}
-            </div>
-            {done.credentials && (
-              <pre className="mt-3 whitespace-pre-wrap break-all rounded-2xl p-4 font-mono text-[12px] text-white" style={{ background: "rgba(0,0,0,.35)", border: "1px solid var(--line)" }}>
-                {done.credentials}
-              </pre>
-            )}
-            <p className="mt-3 text-[12px]" style={{ color: "var(--ink-3)" }}>{done.sentToTelegram ? c.inChat : c.notInChat}</p>
-            <button type="button" onClick={onClose} className="btn btn-primary mt-5 w-full !py-3.5 text-sm">{c.close}</button>
-          </div>
-        ) : !invoice ? (
-          <div className="mt-5">
-            <div className="mb-2 text-[11px] uppercase tracking-[0.14em]" style={{ color: "var(--ink-3)" }}>{c.network}</div>
-            <div className="grid grid-cols-2 gap-2">
-              {networks.map((n) => (
-                <button
-                  key={n.id}
-                  type="button"
-                  onClick={() => {
-                    setNetworkId(n.id);
-                    haptic("light");
-                  }}
-                  className="rounded-2xl p-3 text-left transition-colors"
-                  style={{
-                    background: networkId === n.id ? "rgba(0,180,216,.12)" : "rgba(255,255,255,.03)",
-                    border: `1px solid ${networkId === n.id ? "rgba(0,245,212,.5)" : "var(--line)"}`,
-                  }}
-                >
-                  <div className="text-[14px] font-bold text-white">{n.asset}</div>
-                  <div className="text-[11px]" style={{ color: "var(--ink-3)" }}>{n.net}</div>
-                </button>
-              ))}
-            </div>
-            {error && <p className="mt-3 text-[12px]" style={{ color: "#fb7185" }}>{error}</p>}
-            <button type="button" disabled={busy || !networkId} onClick={create} className="btn btn-primary mt-5 w-full !py-3.5 text-sm disabled:opacity-60">
-              <Wallet className="h-4 w-4" /> {busy ? "…" : c.create}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-5">
-            <div className="text-[12px]" style={{ color: "var(--ink-3)" }}>{c.send}</div>
-            <div className="ff-d text-2xl font-black text-white">
-              {invoice.amountCrypto} {invoice.assetLabel}
-            </div>
-            <div className="mt-1 text-[11px]" style={{ color: "var(--ink-3)" }}>{invoice.networkLabel} · {c.order} #{invoice.orderNo}</div>
-
-            <div className="mx-auto mt-4 w-44 rounded-2xl bg-black p-3" style={{ border: "1px solid var(--line)" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/api/qr?text=${encodeURIComponent(invoice.depositAddress)}`} alt="QR" className="h-full w-full" />
-            </div>
-
-            <div className="mt-4 text-[12px]" style={{ color: "var(--ink-3)" }}>{c.to}</div>
-            <button
-              type="button"
-              onClick={async () => haptic((await copyText(invoice.depositAddress)) ? "success" : "error")}
-              className="mt-1 w-full break-all rounded-xl p-3 text-left font-mono text-[12px] text-white"
-              style={card}
-              title={c.copyAddr}
-            >
-              {invoice.depositAddress}
-              <span className="mt-1 block font-sans text-[11px]" style={{ color: "#00f5d4" }}>{c.copyAddr}</span>
-            </button>
-
-            <label className="mt-4 block text-[12px]" style={{ color: "var(--ink-3)" }}>
-              <span className="flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5" /> {c.tx}</span>
-              <input
-                value={tx}
-                onChange={(e) => setTx(e.target.value)}
-                placeholder="0x… / hash"
-                className="mt-1.5 w-full rounded-xl px-3.5 py-3 font-mono text-[13px] text-white outline-none"
-                style={{ background: "rgba(255,255,255,.04)", border: "1px solid var(--line)" }}
-              />
-            </label>
-            {error && <p className="mt-3 text-[12px]" style={{ color: "#fb7185" }}>{error}</p>}
-            <button type="button" disabled={busy} onClick={pay} className="btn btn-primary mt-5 w-full !py-3.5 text-sm disabled:opacity-60">
-              {busy ? "…" : c.paid}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}

@@ -24,7 +24,10 @@ export async function POST(req: Request) {
     await createSession(user.id);
     return NextResponse.json({ ok: true, user });
   } catch (e) {
-    console.error("[auth/telegram] ", e);
+    if (e instanceof Error && e.message === "ACCOUNT_BANNED") {
+      return NextResponse.json({ error: "ACCOUNT_BANNED" }, { status: 403 });
+    }
+    console.error("[auth/telegram] ", e instanceof Error ? e.name : "unknown");
     return NextResponse.json({ error: "SERVER" }, { status: 500 });
   }
 }

@@ -7,8 +7,11 @@ import { Sparkle, XIcon, LogOut, Receipt, UserIcon, Lock, Check } from "@/compon
 
 export type SessionUser = {
   id: string;
+  customerId?: string;
   email: string;
   name: string;
+  role?: "user" | "admin";
+  status?: "active" | "banned";
   createdAt?: string;
   telegramId?: string | null;
   telegramUsername?: string | null;
@@ -78,6 +81,8 @@ export function AuthModal({
     if (code === "PASSWORD") return a.errorPass;
     if (code === "EXISTS") return a.errorExists;
     if (code === "CREDS") return a.errorCreds;
+    if (code === "ACCOUNT_BANNED") return "Аккаунт заблокирован. Обратитесь в поддержку.";
+    if (code === "RATE_LIMIT") return "Слишком много попыток. Повторите вход через 15 минут.";
     return a.errorCreds;
   };
 

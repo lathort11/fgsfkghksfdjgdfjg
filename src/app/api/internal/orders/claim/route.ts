@@ -54,6 +54,10 @@ export async function POST(req: Request) {
   //      otherwise                                → move the order to it
   //  · no owner                                  → Telegram account takes it
   const owner = row.order.userId ? await getUserById(row.order.userId) : null;
+  // A wallet-backed purchase cannot be reassigned using its receipt alone.
+  if (owner && row.order.networkId.startsWith("balance-") && owner.telegramId !== telegramId) {
+    return NextResponse.json({ error: "ACCOUNT_LINK_REQUIRED" }, { status: 403 });
+  }
   if (owner?.telegramId && owner.telegramId !== telegramId) {
     return NextResponse.json({ error: "ALREADY_CLAIMED" }, { status: 409 });
   }

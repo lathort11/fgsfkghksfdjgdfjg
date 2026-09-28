@@ -1,36 +1,20 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
-import Site from "@/components/livka/site";
+import WalletDashboard, { type WalletSection } from "@/components/livka/wallet-dashboard";
 import { LangProvider } from "@/components/livka/i18n-context";
 import { getCurrentUser } from "@/lib/session";
-import { getProducts, getStats } from "@/lib/livka";
-import { DICTS, LOCALE_COOKIE, isLocale, type Locale } from "@/lib/i18n";
+import { getProducts } from "@/lib/livka";
+import { walletMode, walletSnapshot } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Мой кошелёк — LIVKAMARKET",
+  description: "Ваш баланс, AI-подписки и покупки в одном месте. Пополняйте кошелёк, подтверждайте покупки и управляйте средствами в LIVKAMARKET.",
+};
 
-async function getLocale(): Promise<Locale> {
-  const jar = await cookies();
-  const value = jar.get(LOCALE_COOKIE)?.value;
-  return isLocale(value) ? value : "ru";
-}
-
-export async function generateMetadata(): Promise<Metadata> {
-  const locale = await getLocale();
-  const d = DICTS[locale];
-  return { title: d.meta.title, description: d.meta.description };
-}
-
-export default async function HomePage() {
-  const [locale, products, stats, user] = await Promise.all([
-    getLocale(),
-    getProducts(),
-    getStats(),
-    getCurrentUser(),
-  ]);
-
-  return (
-    <LangProvider initial={locale}>
-      <Site products={products} stats={stats} initialUser={user} />
-    </LangProvider>
-  );
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ section?: string }> }) {
+  const [products, user, params] = await Promise.all([getProducts(), getCurrentUser(), searchParams]);
+  const mode = walletMode();
+  const wallet = user ? await walletSnapshot(user.id) : null;
+  const section: WalletSection = ["catalog", "purchases", "history"].includes(params.section ?? "") ? params.section as WalletSection : "wallet";
+  return <LangProvider initial="ru"><WalletDashboard products={products} initialUser={user} initialWallet={wallet} mode={mode} initialSection={section} /></LangProvider>;
 }

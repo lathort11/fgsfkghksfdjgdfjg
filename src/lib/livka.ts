@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import { products, orders } from "@/db/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
-import { newSecret, newOrderNo, randomPassword, randomApiKey } from "@/lib/auth";
 import { NETWORKS, getNetwork, promoDiscount, type Network } from "@/lib/networks";
 
 export { NETWORKS, getNetwork, promoDiscount };
@@ -59,7 +58,8 @@ export function quoteCrypto(totalCents: number, network: Network, rates: Rates) 
 }
 
 /* ═══════════ SEED ═══════════ */
-const SEED = [
+// Missing slugs are inserted on boot; existing rows (admin prices, visibility) are never overwritten.
+const SEED: (typeof products.$inferInsert)[] = [
   {
     slug: "gemini-pro-18",
     priceCents: 499_000,
@@ -108,14 +108,18 @@ const SEED = [
     isFeatured: false,
     sortOrder: 4,
   },
+  // Team plans ship disabled: an admin reviews the price and enables them in LIVKA CONTROL.
+  { slug: "chatgpt-plus-4", priceCents: 499_000, per: "monthly", accent: "#10a37f", icon: "chatgpt", kind: "account", stock: 10, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 5 },
+  { slug: "chatgpt-plus-8", priceCents: 899_000, per: "monthly", accent: "#10a37f", icon: "chatgpt", kind: "account", stock: 6, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 6 },
+  { slug: "chatgpt-pro-4", priceCents: 1_299_000, per: "monthly", accent: "#2fe6a7", icon: "chatgpt", kind: "account", stock: 6, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 7 },
+  { slug: "chatgpt-pro-8", priceCents: 2_299_000, per: "monthly", accent: "#2fe6a7", icon: "chatgpt", kind: "account", stock: 4, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 8 },
 ];
 
 export async function seedProducts() {
-  const [row] = await db.select({ n: sql<number>`count(*)::int` }).from(products);
-  if (row?.n && row.n > 0) return;
-  for (const p of SEED) {
-    await db.insert(products).values(p).onConflictDoNothing();
-  }
+  const existing = await db.select({ slug: products.slug }).from(products);
+  const known = new Set(existing.map((row) => row.slug));
+  const missing = SEED.filter((p) => !known.has(p.slug));
+  if (missing.length) await db.insert(products).values(missing).onConflictDoNothing();
 }
 
 /* ═══════════ QUERIES ═══════════ */
@@ -144,113 +148,7 @@ export async function getStats() {
   };
 }
 
-/* ═══════════ ORDERS ═══════════ */
-export async function createOrder(input: {
-  userId: string | null;
-  productId: string;
-  networkId: string;
-  promo?: string;
-}) {
-  const product = await getProductById(input.productId);
-  if (!product) throw new Error("PRODUCT_NOT_FOUND");
-  const network = getNetwork(input.networkId);
-  if (!network) throw new Error("NETWORK_NOT_FOUND");
-  if (product.stock <= 0) throw new Error("OUT_OF_STOCK");
-
-  const discount = promoDiscount(input.promo ?? "");
-  const totalCents = Math.round(product.priceCents * (1 - discount));
-  const rates = await getRates();
-  const quote = quoteCrypto(totalCents, network, rates);
-
-  const [order] = await db
-    .insert(orders)
-    .values({
-      orderNo: newOrderNo(),
-      secret: newSecret(),
-      userId: input.userId,
-      productId: product.id,
-      status: "awaiting_payment",
-      promo: input.promo?.trim().toUpperCase() || null,
-      totalCents,
-      discount: Math.round(discount * 10_000),
-      networkId: network.id,
-      networkLabel: network.net,
-      assetLabel: network.asset,
-      depositAddress: network.address,
-      amountCrypto: quote.amountCrypto,
-      rateUsd: quote.usd.toFixed(2),
-    })
-    .returning();
-
-  return { order, product, network, quote, discount };
-}
-
-function makeCredentials(kind: string, productName: string): string {
-  if (kind === "api") {
-    return [
-      `API_KEY = ${randomApiKey()}`,
-      `ENDPOINT = https://generativelanguage.googleapis.com/v1beta`,
-      `MODEL = gemini-2.0-pro`,
-      `RATE_LIMIT = 2000 RPM / 4M TPM`,
-    ].join("\n");
-  }
-  return [
-    `LOGIN = livka.${randomPassword(6).toLowerCase()}@gmail.com`,
-    `PASSWORD = ${randomPassword(14)}`,
-    `RECOVERY_MAIL = ${randomPassword(6).toLowerCase()}.recovery@gmail.com`,
-    `RECOVERY_PASSWORD = ${randomPassword(12)}`,
-    `SUBSCRIPTION = ${productName}`,
-  ].join("\n");
-}
-
-export async function payOrder(input: {
-  userId: string | null;
-  secret: string;
-  txHash: string;
-}) {
-  const rows = await db
-    .select({ order: orders, product: products })
-    .from(orders)
-    .innerJoin(products, eq(orders.productId, products.id))
-    .where(eq(orders.secret, input.secret))
-    .limit(1);
-
-  const row = rows[0];
-  if (!row) throw new Error("ORDER_NOT_FOUND");
-  if (!input.userId || row.order.userId !== input.userId) throw new Error("ORDER_NOT_FOUND");
-  if (row.order.status === "delivered") return { ...row, justDelivered: false };
-
-  const credentials = makeCredentials(row.product.kind, row.product.slug);
-
-  await db
-    .update(orders)
-    .set({
-      status: "delivered",
-      txHash: input.txHash.trim(),
-      credentials,
-      userId: row.order.userId ?? input.userId,
-      updatedAt: new Date(),
-    })
-    .where(eq(orders.id, row.order.id));
-
-  await db
-    .update(products)
-    .set({
-      stock: sql`greatest(${products.stock} - 1, 0)`,
-      soldCount: sql`${products.soldCount} + 1`,
-    })
-    .where(eq(products.id, row.product.id));
-
-  const updated = await db
-    .select({ order: orders, product: products })
-    .from(orders)
-    .innerJoin(products, eq(orders.productId, products.id))
-    .where(eq(orders.id, row.order.id))
-    .limit(1);
-
-  return { ...(updated[0] ?? row), justDelivered: true };
-}
-
+/* Order writes live in wallet.ts and are balance-backed transactions. */
 export async function getOrderBySecret(secret: string) {
   const rows = await db
     .select({ order: orders, product: products })

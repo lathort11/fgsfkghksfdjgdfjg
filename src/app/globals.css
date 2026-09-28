@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "./wallet.css";
+@import "./admin.css";
 
 /* ═══════════════════════ TOKENS 2026 ═══════════════════════ */
 :root {
