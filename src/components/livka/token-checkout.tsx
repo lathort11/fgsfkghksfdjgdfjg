@@ -57,11 +57,12 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
   const personalAvailable = Math.max(0, data.cap - (owned?.inputTokens ?? 0) - (owned?.outputTokens ?? 0));
   const bankAvailable = data.bankAvailableTokens ?? 0;
   const stockAvailable = Math.min(personalAvailable, bankAvailable);
-  const affordable = affordableTokens(data.balanceCents, stockAvailable);
+  const rate = data.pricePerMillionCents;
+  const affordable = affordableTokens(data.balanceCents, stockAvailable, rate);
   const maxTokens = Math.min(stockAvailable, affordable);
   const canChoose = !!model?.isActive && stockAvailable >= TOKEN_MIN_PURCHASE && maxTokens >= TOKEN_MIN_PURCHASE;
   const validInput = text === null || (parseTokens(text) >= TOKEN_MIN_PURCHASE && parseTokens(text) <= maxTokens);
-  const cost = tokenCostCents(amountTokens);
+  const cost = tokenCostCents(amountTokens, rate);
   const missing = Math.max(0, cost - data.balanceCents);
   const remaining = formatBankTokens(data.bankAvailableTokens, locale);
 
@@ -166,6 +167,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
           value={amountTokens}
           raw={text}
           max={maxTokens}
+          rate={rate}
           disabled={!canChoose || busy}
           valid={validInput}
           onRawChange={changeText}
@@ -196,10 +198,11 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
   </WalletModal>;
 }
 
-function TokenField({ value, raw, max, disabled, valid, onRawChange, onBlur, onChange }: {
+function TokenField({ value, raw, max, rate, disabled, valid, onRawChange, onBlur, onChange }: {
   value: number;
   raw: string | null;
   max: number;
+  rate: number;
   disabled: boolean;
   valid: boolean;
   onRawChange: (text: string) => void;
@@ -246,7 +249,7 @@ function TokenField({ value, raw, max, disabled, valid, onRawChange, onBlur, onC
         {presets.map((count) => <button key={count} type="button" disabled={disabled} className={value === count ? "is-active" : ""} onClick={() => onChange(count)}>{formatTokens(count, intl)}</button>)}
         {max >= TOKEN_MIN_PURCHASE && <button type="button" disabled={disabled} className={value === max ? "is-active" : ""} onClick={() => onChange(max)}>{copy.max}</button>}
       </div>
-      <b>{money(tokenCostCents(value), true)}</b>
+      <b>{money(tokenCostCents(value, rate), true)}</b>
     </div>
     <p className="wk-token-limit">{!valid && raw !== null && parseTokens(raw) < TOKEN_MIN_PURCHASE ? copy.minLine : copy.balanceMax(formatTokens(max, intl))}</p>
   </div>;

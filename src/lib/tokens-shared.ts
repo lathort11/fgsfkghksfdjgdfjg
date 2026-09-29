@@ -2,7 +2,13 @@
 
 export const TOKEN_PRODUCT_SLUG = "claude-api";
 export const MILLION = 1_000_000;
-export const TOKEN_PRICE_PER_MILLION_CENTS = 30; // $0.30 / 1M, one rate for every model and token
+/** Default $0.30 / 1M used to seed a fresh model. The live rate is stored in
+ *  `site_token_models` and can be changed by an admin, so always prefer the
+ *  rate carried on the snapshot (`pricePerMillionCents`). */
+export const TOKEN_PRICE_PER_MILLION_CENTS = 30;
+/** Guardrails for the admin-editable per-million rate (in US cents). */
+export const TOKEN_RATE_MIN_CENTS = 1;
+export const TOKEN_RATE_MAX_CENTS = 100_000;
 export const TOKEN_MIN_PURCHASE = 10 * MILLION;
 export const TOKEN_BANK_INITIAL = 400 * MILLION;
 /** Maximum tokens one customer can hold on any one model. */
@@ -28,14 +34,16 @@ export type TokenSnapshot = {
   pricePerMillionCents: number;
 };
 
-/** The same price is recomputed on the server; fractional cents are rounded up. */
-export function tokenCostCents(tokens: number): number {
-  return Math.ceil((tokens * TOKEN_PRICE_PER_MILLION_CENTS) / MILLION);
+/** The same price is recomputed on the server; fractional cents are rounded up.
+ *  The rate is the live per-million price for the product (admin-editable). */
+export function tokenCostCents(tokens: number, rateCents: number = TOKEN_PRICE_PER_MILLION_CENTS): number {
+  return Math.ceil((tokens * rateCents) / MILLION);
 }
 
-/** Exact integer amount affordable at the fixed rate, capped by available inventory. */
-export function affordableTokens(cents: number, cap: number): number {
-  return Math.max(0, Math.min(cap, Math.floor((Math.max(0, cents) * MILLION) / TOKEN_PRICE_PER_MILLION_CENTS)));
+/** Exact integer amount affordable at the given rate, capped by available inventory. */
+export function affordableTokens(cents: number, cap: number, rateCents: number = TOKEN_PRICE_PER_MILLION_CENTS): number {
+  const rate = rateCents > 0 ? rateCents : TOKEN_PRICE_PER_MILLION_CENTS;
+  return Math.max(0, Math.min(cap, Math.floor((Math.max(0, cents) * MILLION) / rate)));
 }
 
 export function isTokenProduct(product: { kind: string }): boolean {

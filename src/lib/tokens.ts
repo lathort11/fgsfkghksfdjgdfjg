@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   orders, products, tokenAccounts, tokenBank, tokenBalances,
@@ -25,7 +25,10 @@ async function tokenProduct() {
   return product ?? null;
 }
 
-/** Missing models are inserted; visibility is never reset. Old split rates are normalized. */
+/** Missing models are inserted; visibility is never reset. Newly-seeded models
+ *  get the default rate, but existing rates are left untouched so an admin's
+ *  price change persists. Only the legacy split (input≠output) is aligned by
+ *  pinning input to the live output rate. */
 export async function seedTokenModels() {
   const product = await tokenProduct();
   if (!product) return null;
@@ -34,11 +37,10 @@ export async function seedTokenModels() {
   const missing = MODEL_SEED.filter((m) => !known.has(m.slug)).map((m) => ({ ...m, productId: product.id }));
   if (missing.length) await db.insert(tokenModels).values(missing).onConflictDoNothing();
   await db.update(tokenModels).set({
-    inputPerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
-    outputPerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
+    inputPerMillionCents: sql`${tokenModels.outputPerMillionCents}`,
   }).where(and(
     eq(tokenModels.productId, product.id),
-    or(ne(tokenModels.inputPerMillionCents, TOKEN_PRICE_PER_MILLION_CENTS), ne(tokenModels.outputPerMillionCents, TOKEN_PRICE_PER_MILLION_CENTS)),
+    ne(tokenModels.inputPerMillionCents, tokenModels.outputPerMillionCents),
   ));
   return product;
 }
@@ -71,11 +73,16 @@ export async function tokenSnapshot(userId: string | null): Promise<TokenSnapsho
     ? await db.select().from(tokenModels).where(eq(tokenModels.productId, product.id)).orderBy(asc(tokenModels.sortOrder))
     : [];
   const bank = product ? await ensureTokenBank(product.id) : null;
+  // Every model shares one rate; surface the live price so the UI and the cost
+  // preview follow the admin's setting instead of the seed default.
+  const liveRate = models.find((m) => m.isActive)?.outputPerMillionCents
+    ?? models[0]?.outputPerMillionCents
+    ?? TOKEN_PRICE_PER_MILLION_CENTS;
   const common = {
     models: models.map((m) => ({ slug: m.slug, label: m.label, isActive: m.isActive })),
     cap: TOKEN_BALANCE_CAP,
     bankAvailableTokens: bank?.availableTokens ?? null,
-    pricePerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
+    pricePerMillionCents: liveRate,
   };
   if (!userId) return { ...common, apiKey: null, balances: [], balanceCents: 0 };
   const bySlug = new Map(models.map((m) => [m.id, m.slug]));
@@ -150,7 +157,7 @@ export async function purchaseTokens(userId: string, body: Record<string, unknow
     ensure(model?.productId === product.id, "MODEL_NOT_FOUND", 404);
     ensure(model.isActive, "MODEL_DISABLED", 409);
 
-    const cost = tokenCostCents(amountTokens);
+    const cost = tokenCostCents(amountTokens, model.outputPerMillionCents);
     ensure(cost === expected, "PRICE_CHANGED", 409);
     ensure(wallet.balanceCents >= cost, "INSUFFICIENT_BALANCE", 409);
 
