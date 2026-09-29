@@ -37,31 +37,33 @@ BEGIN
     ALTER TABLE site_users ADD COLUMN IF NOT EXISTS telegram_id text;
     ALTER TABLE site_users ADD COLUMN IF NOT EXISTS telegram_username text;
     ALTER TABLE site_users ADD COLUMN IF NOT EXISTS avatar_url text;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'site_users_telegram_id_unique') THEN
+    -- Constraint names are unique per table only: always scope by conrelid,
+    -- otherwise the bot's own `users_pkey` would match.
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.site_users'::regclass AND conname = 'site_users_telegram_id_unique') THEN
       ALTER TABLE site_users ADD CONSTRAINT site_users_telegram_id_unique UNIQUE (telegram_id);
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_email_unique') THEN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.site_users'::regclass AND conname = 'users_email_unique') THEN
       ALTER TABLE site_users RENAME CONSTRAINT users_email_unique TO site_users_email_unique;
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_pkey') THEN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.site_users'::regclass AND conname = 'users_pkey') THEN
       ALTER TABLE site_users RENAME CONSTRAINT users_pkey TO site_users_pkey;
     END IF;
   END IF;
 
   IF to_regclass('public.site_sessions') IS NOT NULL THEN
-    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sessions_pkey') THEN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.site_sessions'::regclass AND conname = 'sessions_pkey') THEN
       ALTER TABLE site_sessions RENAME CONSTRAINT sessions_pkey TO site_sessions_pkey;
     END IF;
-    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sessions_user_id_users_id_fk') THEN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.site_sessions'::regclass AND conname = 'sessions_user_id_users_id_fk') THEN
       ALTER TABLE site_sessions DROP CONSTRAINT sessions_user_id_users_id_fk;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'site_sessions_user_id_site_users_id_fk') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.site_sessions'::regclass AND conname = 'site_sessions_user_id_site_users_id_fk') THEN
       ALTER TABLE site_sessions ADD CONSTRAINT site_sessions_user_id_site_users_id_fk
         FOREIGN KEY (user_id) REFERENCES site_users(id) ON DELETE CASCADE;
     END IF;
   END IF;
 
-  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_user_id_users_id_fk') THEN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.orders') AND conname = 'orders_user_id_users_id_fk') THEN
     ALTER TABLE orders DROP CONSTRAINT orders_user_id_users_id_fk;
     ALTER TABLE orders ADD CONSTRAINT orders_user_id_site_users_id_fk
       FOREIGN KEY (user_id) REFERENCES site_users(id) ON DELETE SET NULL;
