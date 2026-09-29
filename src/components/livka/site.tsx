@@ -5,7 +5,7 @@ import { Counter, Reveal, ScrollProgress, Spot } from "@/components/livka/ui";
 import { ScrambleText } from "@/components/livka/interactive";
 import { useI18n } from "@/components/livka/i18n-context";
 import { AccountMenu, AuthModal, type SessionUser } from "@/components/livka/auth";
-import { CheckoutModal, ICONS, MyOrdersModal, fmtRub, hexA } from "@/components/livka/checkout";
+import { CheckoutModal, ICONS, MyOrdersModal, fmtUsd, hexA } from "@/components/livka/checkout";
 import { ProfileModal } from "@/components/livka/profile";
 import type { ProductRow } from "@/db/schema";
 import { LOCALES, type Locale } from "@/lib/i18n";
@@ -399,7 +399,7 @@ function Hero({ products, onBuy }: { products: ProductRow[]; onBuy: (p: ProductR
               >
                 <div key={`${active.slug}-price`} className="swap-in min-w-0 pl-4">
                   <div className="ff-d text-2xl leading-none text-white" style={{ fontWeight: 800 }}>
-                    {fmtRub(active.priceCents)}
+                    {fmtUsd(active.priceCents)}
                   </div>
                   <div className="mt-1.5 truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
                     {t.per[active.per as keyof typeof t.per]}
@@ -641,7 +641,7 @@ function Catalog({
                   >
                     <div className="min-w-0 pl-4">
                       <div className="ff-d text-[26px] leading-none text-white" style={{ fontWeight: 800 }}>
-                        {fmtRub(p.priceCents)}
+                        {fmtUsd(p.priceCents)}
                       </div>
                       <div
                         className="mt-1.5 flex flex-col gap-0.5 text-[11px] lg:flex-row lg:gap-1.5"
@@ -698,7 +698,7 @@ function Catalog({
 /* ═══════════════ COMPARE ═══════════════ */
 function Compare({ products, onBuy }: { products: ProductRow[]; onBuy: (p: ProductRow) => void }) {
   const { t } = useI18n();
-  const cols = ["gemini-pro-18", "antigravity-api", "chatgpt-pro", "supergrok"] as const;
+  const cols = ["gemini-pro-18", "claude-api", "chatgpt-pro", "supergrok"] as const;
   const colKeys = ["gemini", "api", "chatgpt", "grok"] as const;
 
   return (
@@ -746,7 +746,7 @@ function Compare({ products, onBuy }: { products: ProductRow[]; onBuy: (p: Produ
                               className="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-full transition-all hover:brightness-125"
                               style={{ background: hexA(accent, 0.14), color: accent, border: `1px solid ${hexA(accent, 0.3)}` }}
                             >
-                              {fmtRub(p?.priceCents ?? 0)}
+                              {fmtUsd(p?.priceCents ?? 0)}
                             </button>
                           </div>
                         </th>
@@ -1062,7 +1062,7 @@ function TrackOrder() {
                 />
                 <Info
                   label={t.track.amount}
-                  value={`${fmtRub(res.totalCents as number)} · ${res.assetLabel} ${res.amountCrypto}`}
+                  value={`${fmtUsd(res.totalCents as number)} · ${res.assetLabel} ${res.amountCrypto}`}
                 />
                 {res.credentials ? (
                   <div className="sm:col-span-2">
@@ -1342,7 +1342,7 @@ function LiveTicker({ products }: { products: ProductRow[] }) {
             {t.ticker.title}
           </div>
           <div className="text-[12px] font-semibold text-white">
-            {t.products[p.slug as keyof typeof t.products]?.name} · {fmtRub(p.priceCents)}
+            {t.products[p.slug as keyof typeof t.products]?.name} · {fmtUsd(p.priceCents)}
           </div>
         </div>
       </div>

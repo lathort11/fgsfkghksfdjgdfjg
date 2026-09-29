@@ -31,8 +31,8 @@ async function call<T>(method: string, body: Record<string, unknown>): Promise<T
 
 export function createInvoice(id: string, amountCents: number, asset: string) {
   return call<CryptoInvoice>("createInvoice", {
-    currency_type: "fiat", fiat: "RUB", amount: (amountCents / 100).toFixed(2),
-    accepted_assets: asset, description: "Пополнение баланса LIVKAMARKET",
+    currency_type: "fiat", fiat: "USD", amount: (amountCents / 100).toFixed(2),
+    accepted_assets: asset, description: "LIVKAMARKET balance top-up",
     payload: id, allow_comments: false, allow_anonymous: false, expires_in: 3600,
   });
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Gemini, Grok, OpenAI } from "@lobehub/icons";
 import type { SVGProps } from "react";
 
 type P = SVGProps<SVGSVGElement>;
@@ -26,36 +27,19 @@ export function LivkaMark(p: P) {
   );
 }
 
-/** Twin Meridian — two ellipses, one optical node */
-export function GeminiMark(p: P) {
-  return (
-    <svg {...ink} {...p}>
-      <ellipse cx="12" cy="12" rx="8.1" ry="3.15" transform="rotate(-28 12 12)" />
-      <ellipse cx="12" cy="12" rx="8.1" ry="3.15" transform="rotate(28 12 12)" />
-      <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
-    </svg>
-  );
+/** Google Gemini colour mark from @lobehub/icons */
+export function GeminiMark({ className, style }: P) {
+  return <Gemini.Color size={56} className={className} style={style} />;
 }
 
-/** Recursive Monolith — hexagon + inward spiral */
-export function OpenAiMark(p: P) {
-  return (
-    <svg {...ink} {...p}>
-      <path d="M12 4.1 18.8 8.05v7.9L12 19.9 5.2 15.95v-7.9Z" />
-      <path d="M12 7.1c3.3 0 4.5 2.1 4.5 4.4 0 2.7-2 4 4-4s-3.4 4-5.5 4c-1.7 0-2.6-1.1-2.6-2.5 0-1.2.8-2 2-2 .9 0 1.5.6 1.5 1.4" />
-    </svg>
-  );
+/** OpenAI mark from @lobehub/icons */
+export function OpenAiMark({ className, style }: P) {
+  return <OpenAI size={56} className={className} style={style} />;
 }
 
-/** Kinetic Vector — two 45° parallels and a counter stroke */
-export function GrokMark(p: P) {
-  return (
-    <svg {...ink} {...p}>
-      <path d="M6.1 16.7 16.7 6.1" />
-      <path d="M8.5 18.7 19.1 8.1" />
-      <path d="M16.2 14.4 13.1 17.5" />
-    </svg>
-  );
+/** Grok mark from @lobehub/icons */
+export function GrokMark({ className, style }: P) {
+  return <Grok size={56} className={className} style={style} />;
 }
 
 /** Floating Apex — open triangle, levitating vector above the base */

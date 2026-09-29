@@ -3,7 +3,7 @@ export const PLATES: Record<string, string> = {
   "gemini-pro-18": "/gemini.png",
   "chatgpt-pro": "/chatgpt.png",
   supergrok: "/grok.png",
-  "antigravity-api": "/api.png",
+  "claude-api": "/api.png",
 };
 
 export function plateFor(slug: string) {

@@ -44,7 +44,8 @@ export default async function MiniAppPage({
 }) {
   const [locale, params] = await Promise.all([getLocale(), searchParams]);
   const mode = parseMode(params.mode);
-  const products = mode === "verify" ? [] : await getProducts().catch(() => []);
+  // Token products are priced per model and are bought in the web wallet.
+  const products = mode === "verify" ? [] : (await getProducts().catch(() => [])).filter((p) => p.kind !== "tokens");
   const networks = NETWORKS.filter((n) => MINIAPP_NETWORKS.includes(n.id)).map((n) => ({
     id: n.id,
     asset: n.asset,

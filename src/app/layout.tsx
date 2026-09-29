@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Unbounded, Onest, Noto_Sans_SC } from "next/font/google";
+import { getLocale } from "@/lib/locale-server";
 import "./globals.css";
 
 const display = Unbounded({
@@ -42,9 +43,10 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="ru" className={`${display.variable} ${body.variable} ${cjk.variable}`}>
+    <html lang={locale} className={`${display.variable} ${body.variable} ${cjk.variable}`}>
       <body className="relative min-h-screen bg-[#0b0b10]">
         {children}
       </body>

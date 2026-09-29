@@ -5,7 +5,7 @@ import type { SessionUser } from "@/components/livka/auth";
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
 import { DICTS } from "@/lib/i18n";
-import { fmtRub, hexA } from "@/components/livka/checkout";
+import { fmtUsd, hexA } from "@/components/livka/checkout";
 import {
   Check, LogOut, Receipt, Sparkle, UserIcon, XIcon, Shield, KeyIcon, Wallet,
 } from "@/components/livka/icons";
@@ -223,7 +223,7 @@ export function ProfileModal({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-6">
           <StatBox label={t.profile.orders} value={String(stats.total)} />
           <StatBox label={t.profile.delivered} value={String(stats.delivered)} accent="#2fe6a7" />
-          <StatBox label={t.profile.spent} value={fmtRub(stats.spent)} big />
+          <StatBox label={t.profile.spent} value={fmtUsd(stats.spent)} big />
           <StatBox label={t.profile.crypto} value={String(stats.crypto)} accent="#9be7ff" />
         </div>
 

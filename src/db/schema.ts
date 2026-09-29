@@ -87,11 +87,13 @@ export type User = typeof users.$inferSelect;
 export type ProductRow = typeof products.$inferSelect;
 export type OrderRow = typeof orders.$inferSelect;
 
-/* Each user has separate demo and live accounts. Money is integer kopecks. */
+/* One real-money wallet per user. Money is integer US cents.
+ * The `mode` column is kept for backwards compatibility (the DB check still
+ * allows legacy 'demo' rows) but the app only ever reads and writes 'live'. */
 export const wallets = pgTable("site_wallets", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
-  mode: text("mode", { enum: ["demo", "live"] }).notNull(),
+  mode: text("mode", { enum: ["live"] }).notNull().default("live"),
   balanceCents: integer("balance_cents").notNull().default(0),
   heldCents: integer("held_cents").notNull().default(0),
   verification: text("verification", { enum: ["unverified", "verified", "blocked"] }).notNull().default("unverified"),
@@ -178,3 +180,65 @@ export const walletRateLimits = pgTable("site_wallet_rate_limits", {
   windowAt: timestamp("window_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+
+/* ═══════════ TOKEN PRODUCTS (Claude API) ═══════════
+ * Token products are not sold at a fixed price: the buyer picks a model and
+ * an amount of input/output tokens, and the price is computed from the rates
+ * below. Rates are integer US cents per 1,000,000 tokens. */
+export const tokenModels = pgTable("site_token_models", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  productId: uuid("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  slug: text("slug").notNull().unique(),
+  label: text("label").notNull(),
+  inputPerMillionCents: integer("input_per_million_cents").notNull(),
+  outputPerMillionCents: integer("output_per_million_cents").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check("site_token_rate_positive", sql`${t.inputPerMillionCents} >= 0 AND ${t.outputPerMillionCents} >= 0`),
+]);
+
+/** Shared pool for Claude API. Purchases lock this row before reserving tokens. */
+export const tokenBank = pgTable("site_token_bank", {
+  productId: uuid("product_id").primaryKey().references(() => products.id, { onDelete: "cascade" }),
+  availableTokens: integer("available_tokens").notNull().default(400_000_000),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check("site_token_bank_available_valid", sql`${t.availableTokens} >= 0 AND ${t.availableTokens} <= 400000000`),
+]);
+
+/** One API key per user, reused by every model. */
+export const tokenAccounts = pgTable("site_token_accounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  apiKey: text("api_key").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Remaining tokens per user and model. Hard-capped at 400M per model. */
+export const tokenBalances = pgTable("site_token_balances", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  modelId: uuid("model_id").notNull().references(() => tokenModels.id, { onDelete: "cascade" }),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("site_token_balance_user_model").on(t.userId, t.modelId),
+  check("site_token_balance_cap", sql`${t.inputTokens} >= 0 AND ${t.outputTokens} >= 0 AND ${t.inputTokens} + ${t.outputTokens} <= 400000000`),
+]);
+
+/** Append-only history of token purchases (one row per paid order). */
+export const tokenPurchases = pgTable("site_token_purchases", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id").notNull().unique().references(() => orders.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  modelId: uuid("model_id").notNull().references(() => tokenModels.id),
+  inputTokens: integer("input_tokens").notNull(),
+  outputTokens: integer("output_tokens").notNull(),
+  totalCents: integer("total_cents").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("site_token_purchase_user").on(t.userId, t.createdAt)]);
+
+export type TokenModelRow = typeof tokenModels.$inferSelect;

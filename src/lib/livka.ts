@@ -6,11 +6,11 @@ import { NETWORKS, getNetwork, promoDiscount, type Network } from "@/lib/network
 export { NETWORKS, getNetwork, promoDiscount };
 
 /* ═══════════ RATES ═══════════ */
-type Rates = { rubPerUsd: number; priceRub: Record<string, number> };
+// All prices are integer US cents; crypto quotes are derived from USD spot prices.
+type Rates = { priceUsd: Record<string, number> };
 
 const FALLBACK: Rates = {
-  rubPerUsd: 92,
-  priceRub: { tether: 92, "the-open-network": 500, bitcoin: 8_800_000, ethereum: 310_000 },
+  priceUsd: { tether: 1, "the-open-network": 5.5, bitcoin: 95_000, ethereum: 3_400 },
 };
 
 let rateCache: { at: number; rates: Rates } | null = null;
@@ -20,23 +20,17 @@ export async function getRates(): Promise<Rates> {
   try {
     const ids = NETWORKS.map((n) => n.coingecko).join(",");
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=rub,usd`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`,
       { signal: AbortSignal.timeout(3500), cache: "no-store" }
     );
     if (!res.ok) throw new Error("bad status");
-    const data = (await res.json()) as Record<string, { rub: number; usd: number }>;
-    const priceRub: Record<string, number> = {};
-    let rubPerUsd = FALLBACK.rubPerUsd;
+    const data = (await res.json()) as Record<string, { usd: number }>;
+    const priceUsd: Record<string, number> = {};
     for (const n of NETWORKS) {
       const row = data[n.coingecko];
-      if (row?.rub && row.rub > 0) priceRub[n.coingecko] = row.rub;
-      // 1 USDT ≈ 1 USD, so its RUB price is the RUB-per-USD rate
-      if (n.coingecko === "tether" && row?.rub) rubPerUsd = row.rub;
+      if (row?.usd && row.usd > 0) priceUsd[n.coingecko] = row.usd;
     }
-    const rates: Rates = {
-      rubPerUsd: rubPerUsd || FALLBACK.rubPerUsd,
-      priceRub: Object.keys(priceRub).length ? priceRub : FALLBACK.priceRub,
-    };
+    const rates: Rates = { priceUsd: { ...FALLBACK.priceUsd, ...priceUsd } };
     rateCache = { at: Date.now(), rates };
     return rates;
   } catch {
@@ -46,14 +40,13 @@ export async function getRates(): Promise<Rates> {
 }
 
 export function quoteCrypto(totalCents: number, network: Network, rates: Rates) {
-  const rub = totalCents / 100;
-  const priceRub = rates.priceRub[network.coingecko] ?? FALLBACK.priceRub[network.coingecko] ?? 1;
-  const raw = rub / priceRub;
-  const amountCrypto = raw.toFixed(network.decimals);
+  const usd = totalCents / 100;
+  const price = rates.priceUsd[network.coingecko] ?? FALLBACK.priceUsd[network.coingecko] ?? 1;
+  const amountCrypto = (usd / price).toFixed(network.decimals);
   return {
     amountCrypto,
-    usd: rub / rates.rubPerUsd,
-    rateLabel: `1 ${network.asset} ≈ ${Math.round(priceRub).toLocaleString("ru-RU")} ₽`,
+    usd,
+    rateLabel: `1 ${network.asset} ≈ $${price >= 100 ? Math.round(price).toLocaleString("en-US") : price.toFixed(2)}`,
   };
 }
 
@@ -62,7 +55,7 @@ export function quoteCrypto(totalCents: number, network: Network, rates: Rates) 
 const SEED: (typeof products.$inferInsert)[] = [
   {
     slug: "gemini-pro-18",
-    priceCents: 499_000,
+    priceCents: 5_500,
     per: "once",
     accent: "#5b8cff",
     icon: "gemini",
@@ -73,20 +66,22 @@ const SEED: (typeof products.$inferInsert)[] = [
     sortOrder: 1,
   },
   {
-    slug: "antigravity-api",
-    priceCents: 199_000,
-    per: "monthly",
-    accent: "#a164ff",
-    icon: "gemini",
-    kind: "api",
-    stock: 40,
+    /* Token product: the price comes from the model rates in `site_token_models`,
+     * so `priceCents` stays 0 and the catalog shows the per-million rate instead. */
+    slug: "claude-api",
+    priceCents: 0,
+    per: "tokens",
+    accent: "#d97757",
+    icon: "claude",
+    kind: "tokens",
+    stock: 0,
     soldCount: 2120,
     isFeatured: false,
     sortOrder: 2,
   },
   {
     slug: "chatgpt-pro",
-    priceCents: 399_000,
+    priceCents: 4_500,
     per: "monthly",
     accent: "#2fe6a7",
     icon: "chatgpt",
@@ -98,7 +93,7 @@ const SEED: (typeof products.$inferInsert)[] = [
   },
   {
     slug: "supergrok",
-    priceCents: 249_000,
+    priceCents: 2_800,
     per: "monthly",
     accent: "#9be7ff",
     icon: "grok",
@@ -109,10 +104,10 @@ const SEED: (typeof products.$inferInsert)[] = [
     sortOrder: 4,
   },
   // Team plans ship disabled: an admin reviews the price and enables them in LIVKA CONTROL.
-  { slug: "chatgpt-plus-4", priceCents: 499_000, per: "monthly", accent: "#10a37f", icon: "chatgpt", kind: "account", stock: 10, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 5 },
-  { slug: "chatgpt-plus-8", priceCents: 899_000, per: "monthly", accent: "#10a37f", icon: "chatgpt", kind: "account", stock: 6, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 6 },
-  { slug: "chatgpt-pro-4", priceCents: 1_299_000, per: "monthly", accent: "#2fe6a7", icon: "chatgpt", kind: "account", stock: 6, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 7 },
-  { slug: "chatgpt-pro-8", priceCents: 2_299_000, per: "monthly", accent: "#2fe6a7", icon: "chatgpt", kind: "account", stock: 4, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 8 },
+  { slug: "chatgpt-plus-4", priceCents: 5_500, per: "monthly", accent: "#10a37f", icon: "chatgpt", kind: "account", stock: 10, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 5 },
+  { slug: "chatgpt-plus-8", priceCents: 9_900, per: "monthly", accent: "#10a37f", icon: "chatgpt", kind: "account", stock: 6, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 6 },
+  { slug: "chatgpt-pro-4", priceCents: 14_900, per: "monthly", accent: "#2fe6a7", icon: "chatgpt", kind: "account", stock: 6, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 7 },
+  { slug: "chatgpt-pro-8", priceCents: 25_900, per: "monthly", accent: "#2fe6a7", icon: "chatgpt", kind: "account", stock: 4, soldCount: 0, isFeatured: false, isActive: false, sortOrder: 8 },
 ];
 
 export async function seedProducts() {

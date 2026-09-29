@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useI18n } from "@/components/livka/i18n-context";
 import { Check, KeyIcon, Receipt, Sparkle, UserIcon, Wallet, XIcon } from "@/components/livka/icons";
-import { fmtRub } from "@/components/livka/checkout";
+import { fmtUsd } from "@/components/livka/checkout";
 import { BalanceCheckout } from "@/components/livka/balance-checkout";
 import { ProductTile } from "@/components/livka/product-art";
 
@@ -210,7 +210,7 @@ export function MiniAppMarket({
                 <div className="truncate text-[14px] font-semibold text-white">{pd?.name ?? p.slug}</div>
                 <div className="truncate text-[11px]" style={{ color: "var(--ink-3)" }}>{pd?.tagline}</div>
                 <div className="mt-1 text-[13px] font-bold text-white">
-                  {fmtRub(p.priceCents)} <span className="text-[10px] font-normal" style={{ color: "var(--ink-3)" }}>{per}</span>
+                  {fmtUsd(p.priceCents)} <span className="text-[10px] font-normal" style={{ color: "var(--ink-3)" }}>{per}</span>
                 </div>
               </div>
               <button

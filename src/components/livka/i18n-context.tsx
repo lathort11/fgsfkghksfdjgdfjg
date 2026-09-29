@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { DICTS, LOCALE_COOKIE, type Dict, type Locale } from "@/lib/i18n";
+import { INTL_LOCALE, WALLET_DICTS } from "@/lib/wallet-i18n";
+import { ADMIN_DICTS } from "@/lib/admin-i18n";
 
 type Ctx = {
   locale: Locale;
@@ -42,4 +44,16 @@ export function useI18n(): Ctx {
   const ctx = useContext(I18nCtx);
   if (!ctx) throw new Error("useI18n must be used inside LangProvider");
   return ctx;
+}
+
+/** Wallet / checkout copy for the active language, plus a date locale. */
+export function useW() {
+  const { locale, t } = useI18n();
+  return { w: WALLET_DICTS[locale], t, locale, intl: INTL_LOCALE[locale] };
+}
+
+/** Admin panel copy for the active language, plus a date locale. */
+export function useA() {
+  const { locale, t } = useI18n();
+  return { a: ADMIN_DICTS[locale], t, locale, intl: INTL_LOCALE[locale] };
 }

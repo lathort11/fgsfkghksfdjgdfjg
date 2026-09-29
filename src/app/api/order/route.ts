@@ -8,9 +8,9 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const result = await purchaseWithBalance(user.id, body);
     let sentToTelegram = false;
-    if (!result.demo && result.justDelivered && user.telegramId) {
+    if (result.justDelivered && user.telegramId) {
       sentToTelegram = await deliverOrderToTelegram(result, user.telegramId).catch(() => false);
     }
-    return Response.json({ ok: true, demo: result.demo, order: result.order, sentToTelegram });
+    return Response.json({ ok: true, order: result.order, sentToTelegram });
   } catch (error) { return walletFailure(error); }
 }

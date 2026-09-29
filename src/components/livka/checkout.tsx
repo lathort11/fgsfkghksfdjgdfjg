@@ -5,7 +5,7 @@ import { useI18n } from "@/components/livka/i18n-context";
 import { ApiMark, GeminiMark, GrokMark, OpenAiMark, XIcon } from "@/components/livka/icons";
 export { BalanceCheckout as CheckoutModal } from "@/components/livka/balance-checkout";
 export const ICONS = { gemini: GeminiMark, api: ApiMark, chatgpt: OpenAiMark, grok: GrokMark } as const;
-export const fmtRub = (cents: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(cents / 100);
+export const fmtUsd = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: Number.isInteger(cents / 100) ? 0 : 2, maximumFractionDigits: 2 }).format(cents / 100);
 export function hexA(hex: string, a: number) {
   const h = hex.replace("#", "");
   return `rgba(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)}, ${a})`;
@@ -74,7 +74,7 @@ export function MyOrdersModal({
                   <span className="text-[11px]" style={{ color: "var(--ink-3)" }}>{t.status[r.status as keyof typeof t.status] ?? r.status}</span>
                 </div>
                 <div className="mt-1 text-[12px]" style={{ color: "var(--ink-2)" }}>
-                  {t.products[r.productSlug as keyof typeof t.products]?.name ?? r.productSlug} · {fmtRub(r.totalCents)}
+                  {t.products[r.productSlug as keyof typeof t.products]?.name ?? r.productSlug} · {fmtUsd(r.totalCents)}
                 </div>
                 <div className="mt-2 font-mono text-[12px] tracking-[0.2em] text-white">{r.secret}</div>
                 {r.credentials && (

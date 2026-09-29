@@ -78,17 +78,17 @@ const ru = {
         "Гарантия замены — все 18 месяцев",
       ],
     },
-    "antigravity-api": {
-      name: "Gemini API · Antigravity",
-      tagline: "API-ключи с высокими лимитами",
-      badge: "API-ключи",
+    "claude-api": {
+      name: "Claude API",
+      tagline: "Токены Claude Opus в нужном вам объёме",
+      badge: "API · токены",
       description:
-        "API-ключи Gemini с повышенными лимитами запросов — для ботов, сервисов и продакшен-нагрузок. Документация и примеры кода в комплекте.",
+        "Выберите модель Claude Opus и количество токенов. Покупка от 10 млн, расчёт стоимости в реальном времени, токены зачисляются на ваш баланс сразу.",
       features: [
-        "Повышенные RPM и TPM лимиты",
-        "Доступ к новейшим моделям",
-        "Документация и примеры кода",
-        "Мгновенная замена при сбое",
+        "Выбор модели Claude Opus",
+        "Минимальная покупка — 10 млн токенов",
+        "Токены сразу на балансе",
+        "Персональный API-ключ",
       ],
     },
     "chatgpt-pro": {
@@ -460,17 +460,17 @@ const en: Dict = {
         "Replacement warranty for all 18 months",
       ],
     },
-    "antigravity-api": {
-      name: "Gemini API · Antigravity",
-      tagline: "High-limit API keys",
-      badge: "API keys",
+    "claude-api": {
+      name: "Claude API",
+      tagline: "Claude Opus tokens in the quantity you need",
+      badge: "API · tokens",
       description:
-        "Gemini API keys with raised request limits — built for bots, services and production workloads. Docs and code samples included.",
+        "Choose a Claude Opus model and token quantity. Buy from 10 million tokens with instant price calculation and immediate balance credit.",
       features: [
-        "Higher RPM and TPM limits",
-        "Access to the newest models",
-        "Docs and code samples",
-        "Instant replacement on failure",
+        "Choose your Claude Opus model",
+        "Minimum purchase: 10 million tokens",
+        "Tokens credited instantly",
+        "Your personal API key",
       ],
     },
     "chatgpt-pro": {
@@ -839,17 +839,17 @@ const zh: Dict = {
         "18 个月内全程保修换新",
       ],
     },
-    "antigravity-api": {
-      name: "Gemini API · Antigravity",
-      tagline: "高限额 API 密钥",
-      badge: "API 密钥",
+    "claude-api": {
+      name: "Claude API",
+      tagline: "按需购买 Claude Opus 代币",
+      badge: "API · 代币",
       description:
-        "提升请求限额的 Gemini API 密钥，适合机器人、服务与生产环境负载，附带文档与代码示例。",
+        "选择 Claude Opus 模型与代币数量。最少购买 1000 万代币，费用即时计算，代币购买后立即到账。",
       features: [
-        "更高的 RPM 与 TPM 限额",
-        "访问最新模型",
-        "文档与代码示例",
-        "故障即刻更换",
+        "选择 Claude Opus 模型",
+        "最少购买 1000 万代币",
+        "代币即时到账",
+        "专属 API 密钥",
       ],
     },
     "chatgpt-pro": {
