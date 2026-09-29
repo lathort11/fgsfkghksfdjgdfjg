@@ -27,8 +27,10 @@ RUN apk add --no-cache postgresql-client
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src/db ./src/db
-COPY scripts/migrate-phase3.sql ./scripts/migrate-phase3.sql
-CMD ["sh", "-c", "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/migrate-phase3.sql && npx drizzle-kit push --force --dialect=postgresql --schema=./src/db/schema.ts --url=\"$DATABASE_URL\" --tablesFilter='site_*' --tablesFilter=products --tablesFilter=orders"]
+COPY scripts/migrate-phase3.sql scripts/migrate-phase4.sql ./scripts/
+# Plain SQL only: drizzle-kit push prompts about the bot's sequences in the
+# shared DB, crashes without a TTY and still exits 0.
+CMD ["sh", "-c", "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/migrate-phase3.sql && psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f scripts/migrate-phase4.sql"]
 
 # 4. Lightweight production image
 FROM node:20-alpine AS runner
