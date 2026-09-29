@@ -13,7 +13,6 @@ import { validId } from "@/lib/wallet-security";
 import { productTitle } from "@/lib/order-delivery";
 import { seedProducts } from "@/lib/livka";
 import { seedTokenModels } from "@/lib/tokens";
-import { TOKEN_RATE_MIN_CENTS, TOKEN_RATE_MAX_CENTS } from "@/lib/tokens-shared";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const PAGE_SIZE = 20;
@@ -330,32 +329,5 @@ export async function setProductActive(actor: SafeUser, productId: unknown, acti
       details: { productId: product.id, productSlug: product.slug, productTitle: productTitle(product.slug), priceCents: product.priceCents, ...(note ? { note } : {}) },
     });
     return { product: productTitle(product.slug), active: activeValue };
-  });
-}
-
-/**
- * Claude API token price. All models share one rate, so a change updates every
- * model row for the product and records an audit entry. Priced per million
- * tokens in integer US cents.
- */
-export async function setTokenRate(actor: SafeUser, productId: unknown, _modelSlug: unknown, rateValue: unknown, noteValue: unknown) {
-  adminEnsure(validId(productId), "INVALID_PRODUCT");
-  adminEnsure(typeof rateValue === "number" && Number.isSafeInteger(rateValue) && rateValue >= TOKEN_RATE_MIN_CENTS && rateValue <= TOKEN_RATE_MAX_CENTS, "INVALID_PRICE");
-  const note = cleanNote(noteValue);
-  return db.transaction(async (tx) => {
-    const product = await lockProduct(tx, productId);
-    adminEnsure(product.kind === "tokens", "NOT_TOKEN_PRODUCT", 409);
-    const models = await tx.select().from(tokenModels).where(eq(tokenModels.productId, product.id));
-    adminEnsure(models.length > 0, "MODEL_NOT_FOUND", 404);
-    const oldRate = models[0].outputPerMillionCents;
-    await tx.update(tokenModels)
-      .set({ inputPerMillionCents: rateValue, outputPerMillionCents: rateValue })
-      .where(eq(tokenModels.productId, product.id));
-    await tx.insert(adminAudit).values({
-      actorUserId: actor.id,
-      action: "product.token_rate_changed",
-      details: { productId: product.id, productSlug: product.slug, productTitle: productTitle(product.slug), oldPriceCents: oldRate, newPriceCents: rateValue, ...(note ? { note } : {}) },
-    });
-    return { product: productTitle(product.slug), pricePerMillionCents: rateValue };
   });
 }
