@@ -824,18 +824,20 @@ export async function adminRejectOperation(
 
     if (op.kind === "withdrawal") {
       // Reversal: release held funds back to balance
+      const balance = w.balanceCents + op.amountCents;
+      const held = w.heldCents - op.amountCents;
+      await tx.update(wallets).set({
+        balanceCents: balance,
+        heldCents: held,
+      }).where(eq(wallets.id, w.id));
       await tx.insert(walletEntries).values({
         walletId: w.id,
         operationId: op.id,
-        type: "withdrawal_reversal",
-        amountCents: op.amountCents,
-        heldDeltaCents: -op.amountCents,
+        event: "withdrawal_reversal",
+        deltaCents: op.amountCents,
+        deltaHeldCents: -op.amountCents,
+        balanceAfterCents: balance,
       });
-      await tx.update(wallets).set({
-        balanceCents: sql`${wallets.balanceCents} + ${op.amountCents}`,
-        heldCents: sql`${wallets.heldCents} - ${op.amountCents}`,
-        updatedAt: new Date(),
-      }).where(eq(wallets.id, w.id));
     } else if (op.kind === "deposit") {
       if (op.externalId) {
         void deleteInvoice(op.externalId).catch(() => {});

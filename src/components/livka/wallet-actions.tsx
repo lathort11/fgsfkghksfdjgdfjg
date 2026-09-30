@@ -191,10 +191,10 @@ export function TopUpModal({
       ) : (
         <div className="wk-form">
           <div className="wk-invoice-icon"><Wallet size={30} /></div>
-          <div className="wk-invoice-amount">{money(invoice.amountCents)} <small>{w.toCredit}</small></div>
+          <div className="wk-invoice-amount">{money(invoice.amountCents)} <small>{w.willCredit}</small></div>
           <div className="wk-summary">
-            <SummaryRow label={w.methodRow}>{invoice.method}</SummaryRow>
-            <SummaryRow label={w.statusRow}>
+            <SummaryRow label={w.methodLabel}>{invoice.method}</SummaryRow>
+            <SummaryRow label={w.colStatus}>
               <span className={`wk-status ${invoice.status}`}>{w.status[invoice.status]}</span>
             </SummaryRow>
             <SummaryRow label={w.serviceFee}>{money(0)}</SummaryRow>
@@ -314,7 +314,7 @@ export function OperationModal({ operation, onClose, onUpdate, onPay, onOrders }
   };
   return <WalletModal title={w.kind[op.kind]} subtitle={opTitle(op, w, t)} onClose={onClose}>
     <div className="wk-operation-hero"><span className={`wk-operation-icon ${op.kind}`}>{op.kind === "deposit" ? <ArrowDownLeft /> : op.kind === "purchase" ? <ShoppingBag /> : op.kind === "adjustment" ? <Check /> : <ArrowUpRight />}</span><h3>{op.kind === "deposit" || op.kind === "adjustment" ? "+" : "−"}{money(op.amountCents)}</h3><span className={`wk-status ${op.status}`}>{w.status[op.status]}</span></div>
-    <div className="wk-summary"><SummaryRow label={w.dateRow}>{new Date(op.createdAt).toLocaleString(intl, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</SummaryRow><SummaryRow label={w.methodRow}>{opMethod(op, w)}</SummaryRow>{op.kind === "withdrawal" && <><SummaryRow label={w.feeRow}>{money(op.feeCents)}</SummaryRow><SummaryRow label={w.youReceive} strong>{money(op.amountCents - op.feeCents)}</SummaryRow></>}</div>
+    <div className="wk-summary"><SummaryRow label={w.dateRow}>{new Date(op.createdAt).toLocaleString(intl, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</SummaryRow><SummaryRow label={w.methodLabel}>{opMethod(op, w)}</SummaryRow>{op.kind === "withdrawal" && <><SummaryRow label={w.feeRow}>{money(op.feeCents)}</SummaryRow><SummaryRow label={w.youReceive} strong>{money(op.amountCents - op.feeCents)}</SummaryRow></>}</div>
     {op.address && <div className="wk-review-address"><span>{w.recipientAddr}</span><code>{op.address}</code></div>}
     <button className="wk-copy-id" onClick={async () => { try { await navigator.clipboard.writeText(op.id); setCopied(true); } catch { setError("COPY_FAILED"); } }}><span>{w.operationWord} <code>{op.id}</code></span>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
     {op.reference && <p className="wk-muted wk-break">{w.reviewResult} {op.reference}</p>}
