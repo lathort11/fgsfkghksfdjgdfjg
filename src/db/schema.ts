@@ -208,11 +208,12 @@ export const tokenBank = pgTable("site_token_bank", {
   check("site_token_bank_available_valid", sql`${t.availableTokens} >= 0 AND ${t.availableTokens} <= 400000000`),
 ]);
 
-/** One API key per user, reused by every model. */
 export const tokenAccounts = pgTable("site_token_accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
   apiKey: text("api_key").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  label: text("label"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -241,4 +242,21 @@ export const tokenPurchases = pgTable("site_token_purchases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("site_token_purchase_user").on(t.userId, t.createdAt)]);
 
+/** Append-only log of token usage requests served by the API gateway. */
+export const tokenUsage = pgTable("site_token_usage", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  modelId: uuid("model_id"),
+  endpoint: text("endpoint").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  clientIp: text("client_ip"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("site_token_usage_user").on(t.userId, t.createdAt),
+  index("site_token_usage_created").on(t.createdAt),
+]);
+
 export type TokenModelRow = typeof tokenModels.$inferSelect;
+export type TokenAccountRow = typeof tokenAccounts.$inferSelect;
+export type TokenUsageRow = typeof tokenUsage.$inferSelect;

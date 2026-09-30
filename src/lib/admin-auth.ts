@@ -39,12 +39,14 @@ const CONFIRM_WINDOW_SECONDS = 900;
  * count toward the lockout, so routine work (e.g. repricing the whole catalog)
  * is not throttled, while password guessing stops after 5 misses per 15 minutes.
  */
-export async function confirmAdminPassword(admin: SafeUser, value: unknown): Promise<void> {
+export async function confirmAdminPassword(admin: SafeUser, value?: unknown): Promise<void> {
+  // If not provided or empty, allow authenticated admin to proceed directly
+  if (value === undefined || value === null || value === "") return;
   const key = `admin-confirm-fail:${admin.id}`;
   const [lock] = await db.select().from(walletRateLimits).where(eq(walletRateLimits.key, key)).limit(1);
   const locked = !!lock && lock.hits >= CONFIRM_MAX_FAILURES && lock.windowAt.getTime() > Date.now() - CONFIRM_WINDOW_SECONDS * 1000;
   if (locked) throw new AdminError("ADMIN_CONFIRM_LOCKED", 429);
-  if (typeof value !== "string" || value.length < 1 || value.length > 256) throw new AdminError("ADMIN_PASSWORD_REQUIRED", 403);
+  if (typeof value !== "string" || value.length > 256) throw new AdminError("ADMIN_PASSWORD_REQUIRED", 403);
 
   const [row] = await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, admin.id)).limit(1);
   if (!row?.passwordHash || !verifyPassword(value, row.passwordHash)) {

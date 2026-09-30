@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { and, desc, eq, gt, gte, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  adminAudit, inventory, orders, products, sessions, tokenModels, users, wallets,
+  adminAudit, inventory, orders, products, sessions, tokenAccounts, tokenBalances,
+  tokenBank, tokenModels, tokenPurchases, tokenUsage, users, wallets,
   walletEntries, walletOperations,
 } from "@/db/schema";
 import { adminEnsure } from "@/lib/admin-auth";
@@ -57,11 +58,58 @@ export type AdminRevenue = {
   recent: { orderNo: number; slug: string; title: string; buyer: string; totalCents: number; createdAt: string }[];
 };
 
-export type AdminTokenModel = { slug: string; label: string; inputPerMillionCents: number; outputPerMillionCents: number; isActive: boolean };
+export type AdminTokenModel = { id: string; slug: string; label: string; inputPerMillionCents: number; outputPerMillionCents: number; isActive: boolean };
+
+export type AdminTokenAccountRow = {
+  id: string;
+  userId: string;
+  customerId: string;
+  name: string;
+  email: string;
+  status: "active" | "banned";
+  apiKey: string;
+  isActive: boolean;
+  label: string | null;
+  createdAt: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  requestsCount: number;
+  tokensConsumed: number;
+  lastUsedAt: string | null;
+};
+
+export type AdminClaudeUsageRow = {
+  id: string;
+  userId: string;
+  customerId: string;
+  userName: string;
+  endpoint: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  clientIp: string | null;
+  createdAt: string;
+};
+
+export type AdminClaudeData = {
+  stats: {
+    totalAccounts: number;
+    activeAccounts: number;
+    tokensInCirculation: number;
+    totalConsumed: number;
+    bankAvailable: number;
+    bankCap: number;
+  };
+  accounts: AdminTokenAccountRow[];
+  models: AdminTokenModel[];
+  recentUsage: AdminClaudeUsageRow[];
+};
 
 export type AdminDashboardData = {
   revenue: AdminRevenue;
   tokenModels: AdminTokenModel[];
+  claude: AdminClaudeData;
   stats: { users: number; active: number; banned: number; balanceCents: number; orders: number; granted: number; productsActive: number; productsTotal: number };
   users: AdminUserRow[];
   totalUsers: number;
@@ -89,7 +137,7 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
     spent: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`.as("spent"),
   }).from(orders).groupBy(orders.userId).as("order_agg");
 
-  const [countRows, userRows, userStats, balanceStats, orderStats, productRows, auditRows, revenue] = await Promise.all([
+  const [countRows, userRows, userStats, balanceStats, orderStats, productRows, auditRows, revenue, claude] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(users).where(filter),
     db.select({
       id: users.id, customerNo: users.customerNo, name: users.name, email: users.email,
@@ -109,6 +157,7 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
     db.select().from(products).orderBy(products.sortOrder),
     db.select().from(adminAudit).orderBy(desc(adminAudit.createdAt)).limit(30),
     getAdminRevenue(),
+    getAdminClaudeData(),
   ]);
   const tokenRows = await db.select().from(tokenModels).orderBy(tokenModels.sortOrder);
 
@@ -119,7 +168,8 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
   const totalUsers = countRows[0]?.count ?? 0;
   return {
     revenue,
-    tokenModels: tokenRows.map((m) => ({ slug: m.slug, label: m.label, inputPerMillionCents: m.inputPerMillionCents, outputPerMillionCents: m.outputPerMillionCents, isActive: m.isActive })),
+    tokenModels: tokenRows.map((m) => ({ id: m.id, slug: m.slug, label: m.label, inputPerMillionCents: m.inputPerMillionCents, outputPerMillionCents: m.outputPerMillionCents, isActive: m.isActive })),
+    claude,
     stats: {
       users: userStats[0]?.total ?? 0, active: userStats[0]?.active ?? 0, banned: userStats[0]?.banned ?? 0,
       balanceCents: balanceStats[0]?.balance ?? 0, orders: orderStats[0]?.total ?? 0, granted: orderStats[0]?.granted ?? 0,
@@ -329,5 +379,346 @@ export async function setProductActive(actor: SafeUser, productId: unknown, acti
       details: { productId: product.id, productSlug: product.slug, productTitle: productTitle(product.slug), priceCents: product.priceCents, ...(note ? { note } : {}) },
     });
     return { product: productTitle(product.slug), active: activeValue };
+  });
+}
+
+/* ═══════════ CLAUDE API & TOKENS ═══════════ */
+export async function getAdminClaudeData(): Promise<AdminClaudeData> {
+  await seedTokenModels();
+  const [accountsWithUsers, balancesAgg, usageAgg, models, [bankRow], recentLogs] = await Promise.all([
+    db.select({
+      id: tokenAccounts.id,
+      userId: tokenAccounts.userId,
+      apiKey: tokenAccounts.apiKey,
+      isActive: tokenAccounts.isActive,
+      label: tokenAccounts.label,
+      createdAt: tokenAccounts.createdAt,
+      name: users.name,
+      email: users.email,
+      customerNo: users.customerNo,
+      status: users.status,
+    }).from(tokenAccounts)
+      .innerJoin(users, eq(tokenAccounts.userId, users.id))
+      .orderBy(desc(tokenAccounts.createdAt)),
+
+    db.select({
+      userId: tokenBalances.userId,
+      inputTokens: sql<number>`coalesce(sum(${tokenBalances.inputTokens}), 0)::float8`,
+      outputTokens: sql<number>`coalesce(sum(${tokenBalances.outputTokens}), 0)::float8`,
+      totalTokens: sql<number>`coalesce(sum(${tokenBalances.inputTokens} + ${tokenBalances.outputTokens}), 0)::float8`,
+    }).from(tokenBalances).groupBy(tokenBalances.userId),
+
+    db.select({
+      userId: tokenUsage.userId,
+      requestsCount: sql<number>`count(*)::int`,
+      tokensConsumed: sql<number>`coalesce(sum(${tokenUsage.inputTokens} + ${tokenUsage.outputTokens}), 0)::float8`,
+      lastUsedAt: sql<string>`max(${tokenUsage.createdAt})::text`,
+    }).from(tokenUsage).groupBy(tokenUsage.userId),
+
+    db.select().from(tokenModels).orderBy(tokenModels.sortOrder),
+    db.select().from(tokenBank).limit(1),
+
+    db.select({
+      id: tokenUsage.id,
+      userId: tokenUsage.userId,
+      endpoint: tokenUsage.endpoint,
+      inputTokens: tokenUsage.inputTokens,
+      outputTokens: tokenUsage.outputTokens,
+      clientIp: tokenUsage.clientIp,
+      createdAt: tokenUsage.createdAt,
+      userName: users.name,
+      customerNo: users.customerNo,
+    }).from(tokenUsage)
+      .leftJoin(users, eq(tokenUsage.userId, users.id))
+      .orderBy(desc(tokenUsage.createdAt))
+      .limit(40),
+  ]);
+
+  const balanceMap = new Map(balancesAgg.map((b) => [b.userId, b]));
+  const usageMap = new Map(usageAgg.map((u) => [u.userId, u]));
+
+  const accounts: AdminTokenAccountRow[] = accountsWithUsers.map((a) => {
+    const bal = balanceMap.get(a.userId);
+    const usg = usageMap.get(a.userId);
+    return {
+      id: a.id,
+      userId: a.userId,
+      customerId: formatCustomerId(a.customerNo),
+      name: a.name,
+      email: a.email,
+      status: a.status,
+      apiKey: a.apiKey,
+      isActive: a.isActive,
+      label: a.label,
+      createdAt: a.createdAt.toISOString(),
+      inputTokens: Number(bal?.inputTokens ?? 0),
+      outputTokens: Number(bal?.outputTokens ?? 0),
+      totalTokens: Number(bal?.totalTokens ?? 0),
+      requestsCount: Number(usg?.requestsCount ?? 0),
+      tokensConsumed: Number(usg?.tokensConsumed ?? 0),
+      lastUsedAt: usg?.lastUsedAt ? new Date(usg.lastUsedAt).toISOString() : null,
+    };
+  });
+
+  const tokensInCirculation = accounts.reduce((acc, a) => acc + a.totalTokens, 0);
+  const totalConsumed = accounts.reduce((acc, a) => acc + a.tokensConsumed, 0);
+
+  return {
+    stats: {
+      totalAccounts: accounts.length,
+      activeAccounts: accounts.filter((a) => a.isActive && a.status === "active").length,
+      tokensInCirculation,
+      totalConsumed,
+      bankAvailable: bankRow?.availableTokens ?? 0,
+      bankCap: 400_000_000,
+    },
+    accounts,
+    models: models.map((m) => ({
+      id: m.id,
+      slug: m.slug,
+      label: m.label,
+      inputPerMillionCents: m.inputPerMillionCents,
+      outputPerMillionCents: m.outputPerMillionCents,
+      isActive: m.isActive,
+    })),
+    recentUsage: recentLogs.map((log) => ({
+      id: log.id,
+      userId: log.userId,
+      customerId: log.customerNo ? formatCustomerId(log.customerNo) : "—",
+      userName: log.userName ?? "—",
+      endpoint: log.endpoint,
+      inputTokens: Number(log.inputTokens),
+      outputTokens: Number(log.outputTokens),
+      totalTokens: Number(log.inputTokens) + Number(log.outputTokens),
+      clientIp: log.clientIp,
+      createdAt: log.createdAt.toISOString(),
+    })),
+  };
+}
+
+export async function adminIssueTokenKey(
+  actor: SafeUser,
+  params: { userId: string; initialTokens?: number; label?: string; note?: string }
+) {
+  const { userId, initialTokens = 0, label, note } = params;
+  adminEnsure(validId(userId), "INVALID_USER");
+  return db.transaction(async (tx) => {
+    const target = await targetUser(tx, userId);
+    adminEnsure(target.status === "active", "USER_BANNED", 409);
+
+    const [activeModel] = await tx.select().from(tokenModels).where(eq(tokenModels.isActive, true)).limit(1);
+    adminEnsure(activeModel, "MODEL_NOT_FOUND", 404);
+
+    const newKey = `lvk-claude-${randomBytes(24).toString("base64url")}`;
+    const [existing] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.userId, target.id)).for("update");
+
+    let accountId = "";
+    if (existing) {
+      await tx.update(tokenAccounts).set({
+        apiKey: newKey,
+        isActive: true,
+        label: label ? label.trim().slice(0, 100) : existing.label,
+      }).where(eq(tokenAccounts.id, existing.id));
+      accountId = existing.id;
+    } else {
+      const [created] = await tx.insert(tokenAccounts).values({
+        userId: target.id,
+        apiKey: newKey,
+        isActive: true,
+        label: label ? label.trim().slice(0, 100) : null,
+      }).returning();
+      accountId = created.id;
+    }
+
+    if (initialTokens > 0) {
+      await tx.insert(tokenBalances).values({
+        userId: target.id,
+        modelId: activeModel.id,
+        outputTokens: initialTokens,
+      }).onConflictDoUpdate({
+        target: [tokenBalances.userId, tokenBalances.modelId],
+        set: {
+          outputTokens: sql`${tokenBalances.outputTokens} + ${initialTokens}`,
+          updatedAt: new Date(),
+        },
+      });
+
+      await tx.update(tokenBank).set({
+        availableTokens: sql`greatest(0, ${tokenBank.availableTokens} - ${initialTokens})`,
+        updatedAt: new Date(),
+      }).where(eq(tokenBank.productId, activeModel.productId));
+    }
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      targetUserId: target.id,
+      action: "claude.key_issued",
+      details: { accountId, initialTokens, label, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true, accountId, apiKey: newKey };
+  });
+}
+
+export async function adminUpdateTokenBalance(
+  actor: SafeUser,
+  params: { accountId: string; mode: "add" | "subtract" | "set"; amountTokens: number; note?: string }
+) {
+  const { accountId, mode, amountTokens, note } = params;
+  adminEnsure(validId(accountId), "INVALID_ACCOUNT");
+  adminEnsure(typeof amountTokens === "number" && Number.isSafeInteger(amountTokens) && amountTokens >= 0, "INVALID_AMOUNT");
+
+  return db.transaction(async (tx) => {
+    const [account] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.id, accountId)).for("update");
+    adminEnsure(account, "ACCOUNT_NOT_FOUND", 404);
+
+    const [activeModel] = await tx.select().from(tokenModels).where(eq(tokenModels.isActive, true)).limit(1);
+    adminEnsure(activeModel, "MODEL_NOT_FOUND", 404);
+
+    await tx.insert(tokenBalances).values({
+      userId: account.userId,
+      modelId: activeModel.id,
+      outputTokens: 0,
+    }).onConflictDoNothing();
+
+    const [balance] = await tx.select().from(tokenBalances)
+      .where(and(eq(tokenBalances.userId, account.userId), eq(tokenBalances.modelId, activeModel.id)))
+      .for("update");
+    adminEnsure(balance, "BALANCE_NOT_FOUND", 404);
+
+    let nextOutput = balance.outputTokens;
+    let nextInput = balance.inputTokens;
+    if (mode === "add") {
+      nextOutput += amountTokens;
+    } else if (mode === "subtract") {
+      const takeOut = Math.min(nextOutput, amountTokens);
+      nextOutput -= takeOut;
+      const rest = amountTokens - takeOut;
+      nextInput = Math.max(0, nextInput - rest);
+    } else if (mode === "set") {
+      nextOutput = amountTokens;
+      nextInput = 0;
+    }
+
+    nextOutput = Math.min(400_000_000, Math.max(0, nextOutput));
+    await tx.update(tokenBalances).set({
+      inputTokens: nextInput,
+      outputTokens: nextOutput,
+      updatedAt: new Date(),
+    }).where(eq(tokenBalances.id, balance.id));
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      targetUserId: account.userId,
+      action: "claude.balance_updated",
+      details: { accountId, mode, amountTokens, newOutput: nextOutput, newInput: nextInput, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true, totalTokens: nextInput + nextOutput };
+  });
+}
+
+export async function adminRegenerateTokenKey(actor: SafeUser, accountId: string, note?: string) {
+  adminEnsure(validId(accountId), "INVALID_ACCOUNT");
+  const newKey = `lvk-claude-${randomBytes(24).toString("base64url")}`;
+  return db.transaction(async (tx) => {
+    const [account] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.id, accountId)).for("update");
+    adminEnsure(account, "ACCOUNT_NOT_FOUND", 404);
+
+    await tx.update(tokenAccounts).set({ apiKey: newKey }).where(eq(tokenAccounts.id, accountId));
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      targetUserId: account.userId,
+      action: "claude.key_regenerated",
+      details: { accountId, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true, apiKey: newKey };
+  });
+}
+
+export async function adminToggleTokenAccount(actor: SafeUser, accountId: string, isActive: boolean, note?: string) {
+  adminEnsure(validId(accountId), "INVALID_ACCOUNT");
+  return db.transaction(async (tx) => {
+    const [account] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.id, accountId)).for("update");
+    adminEnsure(account, "ACCOUNT_NOT_FOUND", 404);
+
+    await tx.update(tokenAccounts).set({ isActive }).where(eq(tokenAccounts.id, accountId));
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      targetUserId: account.userId,
+      action: isActive ? "claude.key_activated" : "claude.key_suspended",
+      details: { accountId, isActive, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true, isActive };
+  });
+}
+
+export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string) {
+  adminEnsure(validId(accountId), "INVALID_ACCOUNT");
+  return db.transaction(async (tx) => {
+    const [account] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.id, accountId)).for("update");
+    adminEnsure(account, "ACCOUNT_NOT_FOUND", 404);
+
+    await tx.delete(tokenAccounts).where(eq(tokenAccounts.id, accountId));
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      targetUserId: account.userId,
+      action: "claude.key_deleted",
+      details: { accountId, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true };
+  });
+}
+
+export async function adminUpdateTokenModelRate(
+  actor: SafeUser,
+  params: { modelId: string; inputRateCents: number; outputRateCents: number; isActive: boolean; note?: string }
+) {
+  const { modelId, inputRateCents, outputRateCents, isActive, note } = params;
+  adminEnsure(validId(modelId), "INVALID_MODEL");
+  adminEnsure(inputRateCents >= 0 && outputRateCents >= 0, "INVALID_PRICE");
+
+  return db.transaction(async (tx) => {
+    const [model] = await tx.select().from(tokenModels).where(eq(tokenModels.id, modelId)).for("update");
+    adminEnsure(model, "MODEL_NOT_FOUND", 404);
+
+    await tx.update(tokenModels).set({
+      inputPerMillionCents: inputRateCents,
+      outputPerMillionCents: outputRateCents,
+      isActive,
+    }).where(eq(tokenModels.id, modelId));
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      action: "claude.model_updated",
+      details: { modelId, slug: model.slug, inputRateCents, outputRateCents, isActive, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true };
+  });
+}
+
+export async function adminReplenishTokenBank(actor: SafeUser, addTokens: number, note?: string) {
+  adminEnsure(typeof addTokens === "number" && addTokens > 0, "INVALID_AMOUNT");
+  return db.transaction(async (tx) => {
+    const [bank] = await tx.select().from(tokenBank).limit(1).for("update");
+    adminEnsure(bank, "BANK_NOT_FOUND", 404);
+
+    const nextAvailable = Math.min(400_000_000, bank.availableTokens + addTokens);
+    await tx.update(tokenBank).set({
+      availableTokens: nextAvailable,
+      updatedAt: new Date(),
+    }).where(eq(tokenBank.productId, bank.productId));
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      action: "claude.bank_replenished",
+      details: { added: addTokens, newAvailable: nextAvailable, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true, availableTokens: nextAvailable };
   });
 }

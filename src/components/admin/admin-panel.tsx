@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   Activity, ArrowLeft, Ban, Box, Check, ChevronLeft, ChevronRight, CircleDollarSign,
-  Copy, Eye, EyeOff, Gift, LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, Menu, PackageCheck,
+  Copy, Eye, EyeOff, Gift, KeyRound, LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, Menu, PackageCheck,
   Plus, Search, ShieldCheck, Sparkles, Tag, TrendingUp, Unlock, UsersRound, WalletCards, X,
 } from "lucide-react";
 import type { SafeUser } from "@/lib/session";
@@ -14,11 +14,12 @@ import { useA } from "@/components/livka/i18n-context";
 import { LangSwitch } from "@/components/livka/lang-switch";
 import { ProductsPanel } from "@/components/admin/admin-products";
 import { RevenuePanel } from "@/components/admin/admin-revenue";
+import { AdminClaudePanel } from "@/components/admin/admin-claude";
 import type { AdminDict } from "@/lib/admin-i18n";
 
-type Tab = "overview" | "income" | "users" | "products" | "audit";
+type Tab = "overview" | "income" | "users" | "products" | "claude" | "audit";
 type Action = "ban" | "unban" | "credit" | "grant-product";
-const TABS: Tab[] = ["overview", "income", "users", "products", "audit"];
+const TABS: Tab[] = ["overview", "income", "users", "products", "claude", "audit"];
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", ...options });
@@ -107,8 +108,8 @@ function Dashboard({ admin, initialData }: { admin: SafeUser; initialData: Admin
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.assign("/admin"); };
   const recent = data.users.slice(0, 6);
   const go = (next: Tab) => { setTab(next); setMobile(false); };
-  const icons: Record<Tab, React.ReactNode> = { overview: <LayoutDashboard size={18} />, income: <TrendingUp size={18} />, users: <UsersRound size={18} />, products: <Box size={18} />, audit: <Activity size={18} /> };
-  const badge: Partial<Record<Tab, string>> = { users: String(data.stats.users), products: `${data.stats.productsActive}/${data.stats.productsTotal}` };
+  const icons: Record<Tab, React.ReactNode> = { overview: <LayoutDashboard size={18} />, income: <TrendingUp size={18} />, users: <UsersRound size={18} />, products: <Box size={18} />, claude: <KeyRound size={18} />, audit: <Activity size={18} /> };
+  const badge: Partial<Record<Tab, string>> = { users: String(data.stats.users), products: `${data.stats.productsActive}/${data.stats.productsTotal}`, claude: String(data.claude?.accounts.length ?? 0) };
 
   return <div className="ad-app">{mobile && <button className="ad-scrim" aria-label={a.closeMenu} onClick={() => setMobile(false)} />}
     <aside className={`ad-sidebar ${mobile ? "open" : ""}`}><a href="/admin" className="ad-brand"><img src="/logo.svg" alt="" /><span>LIVKA<b>CONTROL</b><small>ADMIN WORKSPACE</small></span></a><nav><span>{a.navLabel}</span>{TABS.map((id) => <button key={id} className={tab === id ? "active" : ""} onClick={() => go(id)}>{icons[id]}{a.tab[id]}{badge[id] && <i>{badge[id]}</i>}</button>)}</nav><div className="ad-sidebar-bottom"><div className="ad-mode"><span />{a.liveMode}</div><a href="/"><ArrowLeft size={16} />{a.backToSite}</a><button onClick={logout}><LogOut size={16} />{a.endSession}</button><div className="ad-admin"><span>{admin.name[0].toUpperCase()}</span><div><b>{admin.name}</b><small>{admin.customerId}</small></div><ShieldCheck size={16} /></div></div></aside>
@@ -119,6 +120,7 @@ function Dashboard({ admin, initialData }: { admin: SafeUser; initialData: Admin
       {tab === "income" && <RevenuePanel revenue={data.revenue} />}
       {tab === "users" && <UsersTable data={data} loading={loading} onAction={open} onPage={(page) => load(data.query, page)} />}
       {tab === "products" && <ProductsPanel products={data.products} tokenModels={data.tokenModels} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
+      {tab === "claude" && data.claude && <AdminClaudePanel claude={data.claude} usersList={data.users.map((u) => ({ id: u.id, customerId: u.customerId, name: u.name, email: u.email }))} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
       {tab === "audit" && <Audit data={data} />}
       <footer><span>© 2026 LIVKAMARKET CONTROL</span><span><ShieldCheck size={13} />{a.footerRight}</span></footer></main>
     </div>
@@ -171,8 +173,8 @@ function ActionModal(props: { action: Action; user: AdminUserRow; products: Admi
   const { action, user, products, reason, setReason, adminPassword, setAdminPassword, amount, setAmount, productId, setProductId, busy, error, onClose, onConfirm } = props;
   const cents = parseMoney(amount);
   const actionValid = action === "unban" || action === "ban" && reason.trim().length >= 5 || action === "credit" && cents >= 100 && cents <= 500_000 && reason.trim().length >= 3 || action === "grant-product" && !!productId && reason.trim().length >= 3;
-  const valid = actionValid && adminPassword.length > 0;
-  return <WalletModal title={a.action[action]} subtitle={`${user.name} · ${user.customerId}`} onClose={onClose}><div className="ad-confirm-user"><span className="ad-avatar">{user.name[0]?.toUpperCase()}</span><div><b>{user.name}</b><p>{user.email}</p></div><StatusPill status={user.status} /></div>{action === "ban" && <div className="ad-warning"><Ban size={18} /><span>{a.banWarn}</span></div>}{action === "unban" && <div className="ad-info"><Unlock size={18} /><span>{a.unbanInfo}</span></div>}{action === "credit" && <><label className="ad-field">{a.creditAmount}<div><input autoFocus inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, "").slice(0, 10))} /><span>$</span></div></label><div className="ad-credit-summary"><span>{a.currentBalance} <b>{money(user.balanceCents)}</b></span><span>{a.afterCredit} <b>{money(user.balanceCents + cents)}</b></span></div></>}{action === "grant-product" && <label className="ad-field">{a.productLbl}<select value={productId} onChange={(e) => setProductId(e.target.value)}>{products.filter((p) => p.active && p.kind !== "tokens").map((p) => <option key={p.id} value={p.id}>{t.products[p.slug as keyof typeof t.products]?.name ?? p.title} · {a.inStock(p.stock)}</option>)}</select></label>}{action !== "unban" && <label className="ad-field">{action === "ban" ? a.banReason : a.note}<textarea autoFocus={action !== "credit"} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder={action === "ban" ? a.banPh : a.notePh} /></label>}<label className="ad-field">{a.adminConfirm}<input className="ad-password-confirm" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} autoComplete="current-password" placeholder={a.passPh} /></label><div className="ad-modal-note"><ShieldCheck size={15} />{a.modalNote}</div>{error && <div className="ad-error">{error}</div>}<div className="ad-modal-actions"><button className="ad-cancel" onClick={onClose}>{a.cancel}</button><button className={action === "ban" ? "ad-submit danger" : "ad-submit"} onClick={onConfirm} disabled={!valid || busy}>{busy ? <><LoaderCircle className="ad-spin" size={16} />{a.working}</> : action === "ban" ? <><Ban size={16} />{a.doBan}</> : action === "unban" ? <><Unlock size={16} />{a.doUnban}</> : action === "credit" ? <><Plus size={16} />{a.doCredit(money(cents))}</> : <><Gift size={16} />{a.doGrant}</>}</button></div></WalletModal>;
+  const valid = actionValid;
+  return <WalletModal title={a.action[action]} subtitle={`${user.name} · ${user.customerId}`} onClose={onClose}><div className="ad-confirm-user"><span className="ad-avatar">{user.name[0]?.toUpperCase()}</span><div><b>{user.name}</b><p>{user.email}</p></div><StatusPill status={user.status} /></div>{action === "ban" && <div className="ad-warning"><Ban size={18} /><span>{a.banWarn}</span></div>}{action === "unban" && <div className="ad-info"><Unlock size={18} /><span>{a.unbanInfo}</span></div>}{action === "credit" && <><label className="ad-field">{a.creditAmount}<div><input autoFocus inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, "").slice(0, 10))} /><span>$</span></div></label><div className="ad-credit-summary"><span>{a.currentBalance} <b>{money(user.balanceCents)}</b></span><span>{a.afterCredit} <b>{money(user.balanceCents + cents)}</b></span></div></>}{action === "grant-product" && <label className="ad-field">{a.productLbl}<select value={productId} onChange={(e) => setProductId(e.target.value)}>{products.filter((p) => p.active && p.kind !== "tokens").map((p) => <option key={p.id} value={p.id}>{t.products[p.slug as keyof typeof t.products]?.name ?? p.title} · {a.inStock(p.stock)}</option>)}</select></label>}{action !== "unban" && <label className="ad-field">{action === "ban" ? a.banReason : a.note}<textarea autoFocus={action !== "credit"} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} placeholder={action === "ban" ? a.banPh : a.notePh} /></label>}<div className="ad-modal-note"><ShieldCheck size={15} />{a.modalNote}</div>{error && <div className="ad-error">{error}</div>}<div className="ad-modal-actions"><button className="ad-cancel" onClick={onClose}>{a.cancel}</button><button className={action === "ban" ? "ad-submit danger" : "ad-submit"} onClick={onConfirm} disabled={!valid || busy}>{busy ? <><LoaderCircle className="ad-spin" size={16} />{a.working}</> : action === "ban" ? <><Ban size={16} />{a.doBan}</> : action === "unban" ? <><Unlock size={16} />{a.doUnban}</> : action === "credit" ? <><Plus size={16} />{a.doCredit(money(cents))}</> : <><Gift size={16} />{a.doGrant}</>}</button></div></WalletModal>;
 }
 
 function auditIcon(action: string) {

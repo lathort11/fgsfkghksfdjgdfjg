@@ -8,7 +8,7 @@ import {
 } from "@/db/schema";
 import { ensure, idempotency } from "@/lib/wallet-security";
 import {
-  TOKEN_BALANCE_CAP, TOKEN_BANK_INITIAL, TOKEN_MIN_PURCHASE,
+  MILLION, TOKEN_BALANCE_CAP, TOKEN_BANK_INITIAL, TOKEN_MIN_PURCHASE,
   TOKEN_PRICE_PER_MILLION_CENTS, TOKEN_PRODUCT_SLUG, tokenCostCents, type TokenSnapshot,
 } from "@/lib/tokens-shared";
 
@@ -33,13 +33,6 @@ export async function seedTokenModels() {
   const known = new Set(existing.map((row) => row.slug));
   const missing = MODEL_SEED.filter((m) => !known.has(m.slug)).map((m) => ({ ...m, productId: product.id }));
   if (missing.length) await db.insert(tokenModels).values(missing).onConflictDoNothing();
-  await db.update(tokenModels).set({
-    inputPerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
-    outputPerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
-  }).where(and(
-    eq(tokenModels.productId, product.id),
-    or(ne(tokenModels.inputPerMillionCents, TOKEN_PRICE_PER_MILLION_CENTS), ne(tokenModels.outputPerMillionCents, TOKEN_PRICE_PER_MILLION_CENTS)),
-  ));
   return product;
 }
 
@@ -75,7 +68,7 @@ export async function tokenSnapshot(userId: string | null): Promise<TokenSnapsho
     models: models.map((m) => ({ slug: m.slug, label: m.label, isActive: m.isActive })),
     cap: TOKEN_BALANCE_CAP,
     bankAvailableTokens: bank?.availableTokens ?? null,
-    pricePerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
+    pricePerMillionCents: models.find((m) => m.isActive)?.outputPerMillionCents ?? TOKEN_PRICE_PER_MILLION_CENTS,
   };
   if (!userId) return { ...common, apiKey: null, balances: [], balanceCents: 0 };
   const bySlug = new Map(models.map((m) => [m.id, m.slug]));
@@ -150,7 +143,8 @@ export async function purchaseTokens(userId: string, body: Record<string, unknow
     ensure(model?.productId === product.id, "MODEL_NOT_FOUND", 404);
     ensure(model.isActive, "MODEL_DISABLED", 409);
 
-    const cost = tokenCostCents(amountTokens);
+    const rate = model.outputPerMillionCents || TOKEN_PRICE_PER_MILLION_CENTS;
+    const cost = Math.ceil((amountTokens * rate) / MILLION);
     ensure(cost === expected, "PRICE_CHANGED", 409);
     ensure(wallet.balanceCents >= cost, "INSUFFICIENT_BALANCE", 409);
 
@@ -167,12 +161,9 @@ export async function purchaseTokens(userId: string, body: Record<string, unknow
     const apiKey = await apiKeyFor(tx, userId);
     const credentials = [
       "LIVKAMARKET · Claude API",
-      `Model: claude-opus-5-5`,
+      `Model: ${model.label} (${model.slug})`,
       `API key: ${apiKey}`,
-      "",
-      "Endpoint (Anthropic): https://api.livkamarket.app/v1/messages",
-      "Endpoint (OpenAI):    https://api.livkamarket.app/v1/chat/completions",
-      "Header: x-api-key: <key>   or   Authorization: Bearer <key>",
+      "Endpoint: https://api.livkamarket.app/v1/messages",
       "",
       `Purchased: ${amountTokens.toLocaleString("en-US")} tokens`,
       `Token balance: ${(nextInput + nextOutput).toLocaleString("en-US")} tokens`,

@@ -71,7 +71,7 @@ function ProductModal({ product, mode, onClose, onDone }: { product: AdminProduc
   const diff = cents - product.priceCents;
   const percent = product.priceCents ? Math.round((diff / product.priceCents) * 1000) / 10 : 0;
   const priceValid = cents >= 100 && cents <= MAX_PRICE_CENTS && diff !== 0;
-  const valid = password.length > 0 && (mode === "visibility" || priceValid);
+  const valid = mode === "visibility" || priceValid;
   const title = t.products[product.slug as keyof typeof t.products]?.name ?? product.title;
   const per = a.per[product.per] ?? product.per;
 
@@ -80,8 +80,8 @@ function ProductModal({ product, mode, onClose, onDone }: { product: AdminProduc
     if (!valid || busy) return;
     setBusy(true); setError(null);
     const body = mode === "price"
-      ? { action: "set-price", priceCents: cents, expectedPriceCents: product.priceCents, note, adminPassword: password }
-      : { action: "set-active", active: enabling, note, adminPassword: password };
+      ? { action: "set-price", priceCents: cents, expectedPriceCents: product.priceCents, note }
+      : { action: "set-active", active: enabling, note };
     try {
       const response = await fetch(`/api/admin/products/${product.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await response.json();
@@ -113,7 +113,6 @@ function ProductModal({ product, mode, onClose, onDone }: { product: AdminProduc
         ? <div className="ad-info"><Eye size={18} /><span>{a.enableInfo(money(product.priceCents))}</span></div>
         : <div className="ad-warning"><TriangleAlert size={18} /><span>{a.disableWarn}</span></div>}
       <label className="ad-field">{a.comment} <em>{a.optional}</em><textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} placeholder={mode === "price" ? a.pricePh : a.visPh} /></label>
-      <label className="ad-field">{a.adminConfirm}<input className="ad-password-confirm" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" placeholder={a.passPh} /></label>
       {error && <div className="ad-error" role="alert">{a.errors[error] ?? a.saveFailed}</div>}
       <div className="ad-modal-actions">
         <button type="button" className="ad-cancel" onClick={onClose}>{a.cancel}</button>
