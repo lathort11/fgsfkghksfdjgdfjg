@@ -584,7 +584,6 @@ export async function adminIssueTokenKey(
       accountId = created.id;
     }
 
-    if (initialTokens > 0) {
     if (initialTokens >= 0 && balanceMode === "replace") {
       await tx.insert(tokenBalances).values({
         userId: target.id,
@@ -629,7 +628,6 @@ export async function adminIssueTokenKey(
       actorUserId: actor.id,
       targetUserId: target.id,
       action: "claude.key_issued",
-      details: { accountId, initialTokens, label, ...(note ? { note } : {}) },
       details: { accountId, initialTokens, balanceMode, label, ...(note ? { note } : {}) },
     });
 
@@ -732,7 +730,6 @@ export async function adminToggleTokenAccount(actor: SafeUser, accountId: string
   });
 }
 
-export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string) {
 export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string, resetBalance?: boolean) {
   adminEnsure(validId(accountId), "INVALID_ACCOUNT");
   return db.transaction(async (tx) => {
