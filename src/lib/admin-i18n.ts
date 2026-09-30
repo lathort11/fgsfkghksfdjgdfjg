@@ -178,6 +178,12 @@ const ru = {
     fAll: "Все ключи",
     fActive: "Активные",
     fPaused: "Приостановленные",
+    deleteResetBalance: "Также сбросить баланс токенов пользователя (обнулить кошелёк)",
+    balanceModeReplace: "Установить ровно (=)",
+    balanceModeAdd: "Добавить к текущему (+)",
+    quickZero: "Обнулить баланс",
+    quick1M: "Установить 1M",
+    quickActions: "Быстрые действия",
   },
 };
 export type AdminDict = typeof ru;
@@ -351,6 +357,12 @@ const en: AdminDict = {
     fAll: "All Keys",
     fActive: "Active",
     fPaused: "Suspended",
+    deleteResetBalance: "Also reset user's token balance (wipe wallet)",
+    balanceModeReplace: "Set exact balance (=)",
+    balanceModeAdd: "Add to current balance (+)",
+    quickZero: "Zero balance",
+    quick1M: "Set 1M",
+    quickActions: "Quick actions",
   },
 };
 
@@ -523,6 +535,12 @@ const zh: AdminDict = {
     fAll: "全部密钥",
     fActive: "正常",
     fPaused: "已暂停",
+    deleteResetBalance: "同时清空用户的代币余额",
+    balanceModeReplace: "设置为准确值 (=)",
+    balanceModeAdd: "增加到当前余额 (+)",
+    quickZero: "清零余额",
+    quick1M: "设置为 1M",
+    quickActions: "快捷操作",
   },
 };
 

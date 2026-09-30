@@ -1,0 +1,1378 @@
+diff --git a/src/app/admin.css b/src/app/admin.css
+index 655f88f..b393bd5 100644
+--- a/src/app/admin.css
++++ b/src/app/admin.css
+@@ -97,6 +97,10 @@
+ .ad-btn-icon.success:hover{background:#1d3527;border-color:#2e5c41}
+ .ad-btn-icon.danger{color:#d48b9b}
+ .ad-btn-icon.danger:hover{background:#3a1f26;border-color:#5c2d37}
++.ad-quick-btn{height:28px;padding:0 8px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #3d314c;background:#1e1728;color:#b49af2;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center}
++.ad-quick-btn:hover{background:#322346;color:#e8daf7;border-color:#5c427a}
++.ad-quick-btn.danger{border-color:#562d37;background:#2a171d;color:#d48b9b}
++.ad-quick-btn.danger:hover{background:#401e27;color:#f5b0bd}
+ .ad-claude-models-view,.ad-claude-bank-view,.ad-claude-logs-view{padding:22px}
+ .ad-card-head-sub{margin-bottom:20px}
+ .ad-card-head-sub h3{font-size:15px;font-weight:600;color:#eeeaf4;margin:0 0 4px}
+diff --git a/src/app/api/admin/claude/route.ts b/src/app/api/admin/claude/route.ts
+index 7865883..da4105e 100644
+--- a/src/app/api/admin/claude/route.ts
++++ b/src/app/api/admin/claude/route.ts
+@@ -37,7 +37,8 @@ export async function POST(req: Request) {
+         const initialTokens = typeof raw.initialTokens === "number" ? Math.max(0, Math.trunc(raw.initialTokens)) : 0;
+         const label = typeof raw.label === "string" ? raw.label.trim().slice(0, 80) : undefined;
+         const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
+-        result = await adminIssueTokenKey(admin, { userId, initialTokens, label, note });
++        const balanceMode = raw.balanceMode === "add" ? "add" : "replace";
++        result = await adminIssueTokenKey(admin, { userId, initialTokens, label, note, balanceMode });
+         break;
+       }
+ 
+@@ -74,7 +75,8 @@ export async function POST(req: Request) {
+         const accountId = String(raw.accountId ?? "").trim();
+         adminEnsure(accountId.length > 0, "ACCOUNT_REQUIRED");
+         const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
+-        result = await adminDeleteTokenAccount(admin, accountId, note);
++        const resetBalance = Boolean(raw.resetBalance);
++        result = await adminDeleteTokenAccount(admin, accountId, note, resetBalance);
+         break;
+       }
+ 
+diff --git a/src/components/admin/admin-claude.tsx b/src/components/admin/admin-claude.tsx
+index e69de29..38161a2 100644
+--- a/src/components/admin/admin-claude.tsx
++++ b/src/components/admin/admin-claude.tsx
+@@ -0,0 +1,1211 @@
++"use client";
++
++import { useMemo, useState } from "react";
++import {
++  Activity, Check, Coins, Copy, Cpu, Eye, EyeOff, KeyRound,
++  LoaderCircle, Pause, Play, Plus, RefreshCw, Search, ShieldCheck,
++  Sparkles, Trash2, TriangleAlert, Vault, X,
++} from "lucide-react";
++import type {
++  AdminClaudeData, AdminClaudeUsageRow, AdminTokenAccountRow, AdminTokenModel,
++} from "@/lib/admin";
++import { useA } from "@/components/livka/i18n-context";
++import { WalletModal } from "@/components/livka/wallet-primitives";
++import { formatTokens } from "@/lib/tokens-shared";
++
++type ClaudeSubTab = "keys" | "models" | "bank" | "logs";
++type KeyFilter = "all" | "active" | "paused";
++
++export function AdminClaudePanel({
++  claude,
++  usersList = [],
++  onChanged,
++}: {
++  claude: AdminClaudeData;
++  usersList?: { id: string; customerId: string; name: string; email: string }[];
++  onChanged: (toast: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++
++  const [subTab, setSubTab] = useState<ClaudeSubTab>("keys");
++  const [filter, setFilter] = useState<KeyFilter>("all");
++  const [query, setQuery] = useState("");
++  const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
++  const [copiedKey, setCopiedKey] = useState<string | null>(null);
++
++  // Modals state
++  const [issueOpen, setIssueOpen] = useState(false);
++  const [balanceModal, setBalanceModal] = useState<AdminTokenAccountRow | null>(null);
++  const [regenModal, setRegenModal] = useState<AdminTokenAccountRow | null>(null);
++  const [deleteModal, setDeleteModal] = useState<AdminTokenAccountRow | null>(null);
++
++  const toggleReveal = (id: string) => {
++    setRevealedKeys((prev) => ({ ...prev, [id]: !prev[id] }));
++  };
++
++  const copyToClipboard = async (text: string, id: string) => {
++    try {
++      await navigator.clipboard.writeText(text);
++      setCopiedKey(id);
++      setTimeout(() => setCopiedKey(null), 2000);
++    } catch {
++      // fallback
++    }
++  };
++
++  const filteredAccounts = useMemo(() => {
++    const q = query.trim().toLowerCase();
++    return claude.accounts.filter((acc) => {
++      if (filter === "active" && (!acc.isActive || acc.status !== "active")) return false;
++      if (filter === "paused" && acc.isActive && acc.status === "active") return false;
++      if (!q) return true;
++      return (
++        acc.name.toLowerCase().includes(q) ||
++        acc.email.toLowerCase().includes(q) ||
++        acc.customerId.toLowerCase().includes(q) ||
++        acc.apiKey.toLowerCase().includes(q) ||
++        (acc.label && acc.label.toLowerCase().includes(q))
++      );
++    });
++  }, [claude.accounts, filter, query]);
++
++  const toggleAccountStatus = async (account: AdminTokenAccountRow) => {
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "toggle-active",
++          accountId: account.id,
++          isActive: !account.isActive,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onChanged(account.isActive ? c.keyPaused : c.keyActive);
++    } catch (e) {
++      alert(e instanceof Error ? e.message : "Error");
++    }
++  };
++
++  const quickSetBalance = async (account: AdminTokenAccountRow, amount: number) => {
++    const label = amount === 0 ? "обнулить баланс" : `установить баланс ${amount.toLocaleString()} токенов`;
++    if (!window.confirm(`Вы уверены, что хотите ${label} для ${account.name}?`)) return;
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "update-balance",
++          accountId: account.id,
++          mode: "set",
++          amountTokens: amount,
++          note: `Quick set ${amount} tokens`,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onChanged(`Баланс ${account.name}: ${amount.toLocaleString()} токенов`);
++    } catch (e) {
++      alert(e instanceof Error ? e.message : "Error");
++    }
++  };
++
++  return (
++    <div className="ad-claude-space">
++      {/* ── Top Stat Cards ── */}
++      <section className="ad-stats ad-stats-4">
++        <article>
++          <span className="violet"><KeyRound /></span>
++          <div>
++            <small>{c.cActiveKeys}</small>
++            <b>{claude.stats.activeAccounts} <span className="ad-stat-sub">/ {claude.stats.totalAccounts}</span></b>
++            <p>{c.cActiveKeysNote}</p>
++          </div>
++        </article>
++        <article>
++          <span className="mint"><Coins /></span>
++          <div>
++            <small>{c.cCirculation}</small>
++            <b>{formatTokens(claude.stats.tokensInCirculation)}</b>
++            <p>{c.cCirculationNote}</p>
++          </div>
++        </article>
++        <article>
++          <span className="rose"><Activity /></span>
++          <div>
++            <small>{c.cConsumed}</small>
++            <b>{formatTokens(claude.stats.totalConsumed)}</b>
++            <p>{c.cConsumedNote}</p>
++          </div>
++        </article>
++        <article>
++          <span className="amber"><Vault /></span>
++          <div>
++            <small>{c.cBankPool}</small>
++            <b>{formatTokens(claude.stats.bankAvailable)}</b>
++            <p>{c.cBankPoolNote}</p>
++          </div>
++        </article>
++      </section>
++
++      {/* ── Main Navigation & Tabs ── */}
++      <section className="ad-card ad-claude-card">
++        <div className="ad-card-head">
++          <div className="ad-claude-head-tabs">
++            <button
++              className={`ad-subtab ${subTab === "keys" ? "active" : ""}`}
++              onClick={() => setSubTab("keys")}
++            >
++              <KeyRound size={15} />
++              {c.keysTitle}
++              <i>{claude.accounts.length}</i>
++            </button>
++            <button
++              className={`ad-subtab ${subTab === "models" ? "active" : ""}`}
++              onClick={() => setSubTab("models")}
++            >
++              <Cpu size={15} />
++              {c.modelsTitle}
++              <i>{claude.models.length}</i>
++            </button>
++            <button
++              className={`ad-subtab ${subTab === "bank" ? "active" : ""}`}
++              onClick={() => setSubTab("bank")}
++            >
++              <Vault size={15} />
++              {c.bankTitle}
++            </button>
++            <button
++              className={`ad-subtab ${subTab === "logs" ? "active" : ""}`}
++              onClick={() => setSubTab("logs")}
++            >
++              <Activity size={15} />
++              {c.recentLogsTitle}
++              <i>{claude.recentUsage.length}</i>
++            </button>
++          </div>
++
++          {subTab === "keys" && (
++            <button className="ad-cta-btn" onClick={() => setIssueOpen(true)}>
++              <Plus size={15} />
++              {c.issueKeyBtn}
++            </button>
++          )}
++        </div>
++
++        {/* ── Subtab 1: Keys ── */}
++        {subTab === "keys" && (
++          <div className="ad-claude-keys">
++            <div className="ad-claude-filter-bar">
++              <div className="ad-search-inline">
++                <Search size={15} />
++                <input
++                  value={query}
++                  onChange={(e) => setQuery(e.target.value)}
++                  placeholder={c.searchKeysPh}
++                />
++                {query && (
++                  <button onClick={() => setQuery("")} className="ad-clear-btn">
++                    <X size={13} />
++                  </button>
++                )}
++              </div>
++
++              <div className="ad-segment" role="tablist">
++                <button
++                  className={filter === "all" ? "active" : ""}
++                  onClick={() => setFilter("all")}
++                >
++                  {c.fAll} <i>{claude.accounts.length}</i>
++                </button>
++                <button
++                  className={filter === "active" ? "active" : ""}
++                  onClick={() => setFilter("active")}
++                >
++                  {c.fActive} <i>{claude.accounts.filter((x) => x.isActive && x.status === "active").length}</i>
++                </button>
++                <button
++                  className={filter === "paused" ? "active" : ""}
++                  onClick={() => setFilter("paused")}
++                >
++                  {c.fPaused} <i>{claude.accounts.filter((x) => !x.isActive || x.status !== "active").length}</i>
++                </button>
++              </div>
++            </div>
++
++            {filteredAccounts.length ? (
++              <div className="ad-table ad-claude-table">
++                <div className="ad-tr ad-th ad-claude-tr">
++                  <span>{c.colUser}</span>
++                  <span>{c.colKey}</span>
++                  <span>{c.colBalance}</span>
++                  <span>{c.colUsage}</span>
++                  <span>{c.colStatus}</span>
++                  <span>{c.colActions}</span>
++                </div>
++
++                {filteredAccounts.map((account) => {
++                  const isRevealed = !!revealedKeys[account.id];
++                  const isCopied = copiedKey === account.id;
++                  const isKeyActive = account.isActive && account.status === "active";
++
++                  return (
++                    <div key={account.id} className="ad-tr ad-claude-tr">
++                      {/* User Column */}
++                      <div className="ad-user">
++                        <span className="ad-avatar">{account.name[0]?.toUpperCase() ?? "U"}</span>
++                        <span>
++                          <b>{account.name}</b>
++                          <small>{account.email} · <span className="ad-cust-badge">{account.customerId}</span></small>
++                          {account.label && <span className="ad-key-label">{account.label}</span>}
++                        </span>
++                      </div>
++
++                      {/* API Key Column */}
++                      <div className="ad-key-col">
++                        <code className="ad-key-box">
++                          {isRevealed
++                            ? account.apiKey
++                            : `${account.apiKey.slice(0, 15)}...${account.apiKey.slice(-6)}`}
++                        </code>
++                        <div className="ad-key-btns">
++                          <button
++                            title={isRevealed ? "Hide" : "Show"}
++                            onClick={() => toggleReveal(account.id)}
++                            className="ad-key-btn"
++                          >
++                            {isRevealed ? <EyeOff size={13} /> : <Eye size={13} />}
++                          </button>
++                          <button
++                            title="Copy key"
++                            onClick={() => copyToClipboard(account.apiKey, account.id)}
++                            className={`ad-key-btn ${isCopied ? "copied" : ""}`}
++                          >
++                            {isCopied ? <Check size={13} /> : <Copy size={13} />}
++                          </button>
++                        </div>
++                      </div>
++
++                      {/* Token Balance */}
++                      <div className="ad-balance-col">
++                        <b>{account.totalTokens.toLocaleString()}</b>
++                        <small>
++                          Out: {account.outputTokens.toLocaleString()} · In: {account.inputTokens.toLocaleString()}
++                        </small>
++                      </div>
++
++                      {/* Usage */}
++                      <div className="ad-usage-col">
++                        <b>{account.requestsCount} req</b>
++                        <small>{formatTokens(account.tokensConsumed)} used</small>
++                      </div>
++
++                      {/* Status */}
++                      <div>
++                        <span className={`ad-status ${isKeyActive ? "active" : "banned"}`}>
++                          {isKeyActive ? c.keyActive : c.keyPaused}
++                        </span>
++                      </div>
++
++                      {/* Actions */}
++                      <div className="ad-actions">
++                        <button
++                          type="button"
++                          title="Быстро установить ровно 1 000 000 токенов"
++                          onClick={() => quickSetBalance(account, 1_000_000)}
++                          className="ad-quick-btn"
++                        >
++                          1M
++                        </button>
++                        <button
++                          type="button"
++                          title="Быстро обнулить баланс токенов (0)"
++                          onClick={() => quickSetBalance(account, 0)}
++                          className="ad-quick-btn danger"
++                        >
++                          0
++                        </button>
++                        <button
++                          title={c.editBalance}
++                          onClick={() => setBalanceModal(account)}
++                          className="ad-btn-icon"
++                        >
++                          <Coins size={15} />
++                        </button>
++                        <button
++                          title={c.regenKey}
++                          onClick={() => setRegenModal(account)}
++                          className="ad-btn-icon"
++                        >
++                          <RefreshCw size={14} />
++                        </button>
++                        <button
++                          title={account.isActive ? c.pauseKey : c.resumeKey}
++                          onClick={() => toggleAccountStatus(account)}
++                          className={`ad-btn-icon ${account.isActive ? "warning" : "success"}`}
++                        >
++                          {account.isActive ? <Pause size={14} /> : <Play size={14} />}
++                        </button>
++                        <button
++                          title={c.deleteKey}
++                          onClick={() => setDeleteModal(account)}
++                          className="ad-btn-icon danger"
++                        >
++                          <Trash2 size={14} />
++                        </button>
++                      </div>
++                    </div>
++                  );
++                })}
++              </div>
++            ) : (
++              <div className="ad-empty">
++                <KeyRound size={32} />
++                <b>{c.noKeys}</b>
++                <p>{c.noKeysHint}</p>
++              </div>
++            )}
++          </div>
++        )}
++
++        {/* ── Subtab 2: Models & Tariffs ── */}
++        {subTab === "models" && (
++          <ModelsPanel models={claude.models} onChanged={onChanged} />
++        )}
++
++        {/* ── Subtab 3: Token Bank Pool ── */}
++        {subTab === "bank" && (
++          <BankPanel stats={claude.stats} onChanged={onChanged} />
++        )}
++
++        {/* ── Subtab 4: Live Logs ── */}
++        {subTab === "logs" && (
++          <LogsPanel logs={claude.recentUsage} />
++        )}
++      </section>
++
++      {/* ── Issue Key Modal ── */}
++      {issueOpen && (
++        <IssueKeyModal
++          usersList={usersList}
++          onClose={() => setIssueOpen(false)}
++          onDone={async (text) => {
++            setIssueOpen(false);
++            await onChanged(text);
++          }}
++        />
++      )}
++
++      {/* ── Edit Balance Modal ── */}
++      {balanceModal && (
++        <EditBalanceModal
++          account={balanceModal}
++          onClose={() => setBalanceModal(null)}
++          onDone={async (text) => {
++            setBalanceModal(null);
++            await onChanged(text);
++          }}
++        />
++      )}
++
++      {/* ── Regenerate Key Modal ── */}
++      {regenModal && (
++        <RegenKeyModal
++          account={regenModal}
++          onClose={() => setRegenModal(null)}
++          onDone={async (text) => {
++            setRegenModal(null);
++            await onChanged(text);
++          }}
++        />
++      )}
++
++      {/* ── Delete Key Modal ── */}
++      {deleteModal && (
++        <DeleteKeyModal
++          account={deleteModal}
++          onClose={() => setDeleteModal(null)}
++          onDone={async (text) => {
++            setDeleteModal(null);
++            await onChanged(text);
++          }}
++        />
++      )}
++    </div>
++  );
++}
++
++/* ═══════════ SUB-PANELS ═══════════ */
++
++function ModelsPanel({
++  models,
++  onChanged,
++}: {
++  models: AdminTokenModel[];
++  onChanged: (text: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++  const [editingId, setEditingId] = useState<string | null>(null);
++  const [inputRateCents, setInputRateCents] = useState(30);
++  const [outputRateCents, setOutputRateCents] = useState(30);
++  const [isActive, setIsActive] = useState(true);
++  const [busy, setBusy] = useState(false);
++
++  const startEdit = (m: AdminTokenModel) => {
++    setEditingId(m.id);
++    setInputRateCents(m.inputPerMillionCents);
++    setOutputRateCents(m.outputPerMillionCents);
++    setIsActive(m.isActive);
++  };
++
++  const saveModel = async (model: AdminTokenModel) => {
++    setBusy(true);
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "update-model",
++          modelId: model.id,
++          inputRateCents,
++          outputRateCents,
++          isActive,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      setEditingId(null);
++      await onChanged(`${model.label}: ${c.saveModel}`);
++    } catch (e) {
++      alert(e instanceof Error ? e.message : "Error");
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <div className="ad-claude-models-view">
++      <div className="ad-card-head-sub">
++        <div>
++          <h3>{c.modelsTitle}</h3>
++          <p>{c.modelsSubtitle}</p>
++        </div>
++      </div>
++
++      <div className="ad-models-grid">
++        {models.map((model) => {
++          const isEditing = editingId === model.id;
++          return (
++            <article key={model.id} className={`ad-model-card ${model.isActive ? "" : "is-disabled"}`}>
++              <div className="ad-model-top">
++                <span className="ad-model-icon"><Cpu size={22} /></span>
++                <div>
++                  <h4>{model.label}</h4>
++                  <code>{model.slug}</code>
++                </div>
++                <span className={`ad-status ${model.isActive ? "active" : "hidden"}`}>
++                  {model.isActive ? c.modelActive : c.modelDisabled}
++                </span>
++              </div>
++
++              <div className="ad-model-body">
++                {isEditing ? (
++                  <div className="ad-model-edit-form">
++                    <label>
++                      <span>Input rate per 1M tokens ($):</span>
++                      <div className="ad-rate-input-wrap">
++                        <span>$</span>
++                        <input
++                          type="number"
++                          step="0.01"
++                          min="0.01"
++                          value={(inputRateCents / 100).toFixed(2)}
++                          onChange={(e) => setInputRateCents(Math.round(parseFloat(e.target.value || "0") * 100))}
++                        />
++                      </div>
++                    </label>
++
++                    <label style={{ marginTop: "8px" }}>
++                      <span>Output rate per 1M tokens ($):</span>
++                      <div className="ad-rate-input-wrap">
++                        <span>$</span>
++                        <input
++                          type="number"
++                          step="0.01"
++                          min="0.01"
++                          value={(outputRateCents / 100).toFixed(2)}
++                          onChange={(e) => setOutputRateCents(Math.round(parseFloat(e.target.value || "0") * 100))}
++                        />
++                      </div>
++                    </label>
++
++                    <label className="ad-checkbox-label">
++                      <input
++                        type="checkbox"
++                        checked={isActive}
++                        onChange={(e) => setIsActive(e.target.checked)}
++                      />
++                      <span>Active for customer purchase</span>
++                    </label>
++
++                    <div className="ad-model-actions">
++                      <button
++                        className="ad-cancel"
++                        disabled={busy}
++                        onClick={() => setEditingId(null)}
++                      >
++                        {a.cancel}
++                      </button>
++                      <button
++                        className="ad-submit"
++                        disabled={busy}
++                        onClick={() => saveModel(model)}
++                      >
++                        {busy ? <LoaderCircle className="ad-spin" size={14} /> : c.saveModel}
++                      </button>
++                    </div>
++                  </div>
++                ) : (
++                  <>
++                    <div className="ad-model-rate-display">
++                      <small>{c.ratePer1M}</small>
++                      <b>
++                        ${(model.inputPerMillionCents / 100).toFixed(2)} in · ${(model.outputPerMillionCents / 100).toFixed(2)} out
++                      </b>
++                      <p>Per 1,000,000 input / output tokens</p>
++                    </div>
++
++                    <div className="ad-model-footer">
++                      <button className="ad-model-edit-btn" onClick={() => startEdit(model)}>
++                        Edit Price & Status
++                      </button>
++                    </div>
++                  </>
++                )}
++              </div>
++            </article>
++          );
++        })}
++      </div>
++    </div>
++  );
++}
++
++function BankPanel({
++  stats,
++  onChanged,
++}: {
++  stats: AdminClaudeData["stats"];
++  onChanged: (text: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++  const [busy, setBusy] = useState(false);
++
++  const replenish = async (amount: number) => {
++    setBusy(true);
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "replenish-bank",
++          addTokens: amount,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onChanged(`+${formatTokens(amount)}: ${c.replenishBank}`);
++    } catch (e) {
++      alert(e instanceof Error ? e.message : "Error");
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const pct = Math.min(100, Math.round((stats.bankAvailable / stats.bankCap) * 100));
++
++  return (
++    <div className="ad-claude-bank-view">
++      <div className="ad-card-head-sub">
++        <div>
++          <h3>{c.bankTitle}</h3>
++          <p>{c.bankSubtitle}</p>
++        </div>
++      </div>
++
++      <div className="ad-bank-card">
++        <div className="ad-bank-visual">
++          <div className="ad-bank-numbers">
++            <div>
++              <small>Available in Bank</small>
++              <b>{stats.bankAvailable.toLocaleString()}</b>
++              <span>{formatTokens(stats.bankAvailable)} tokens</span>
++            </div>
++            <div>
++              <small>System Hard Cap</small>
++              <b>{stats.bankCap.toLocaleString()}</b>
++              <span>{formatTokens(stats.bankCap)} tokens</span>
++            </div>
++          </div>
++
++          <div className="ad-bank-progress-track">
++            <div className="ad-bank-progress-bar" style={{ width: `${pct}%` }} />
++          </div>
++          <div className="ad-bank-pct">{pct}% capacity remaining</div>
++        </div>
++
++        <div className="ad-bank-replenish-box">
++          <h4>{c.replenishBank}</h4>
++          <p>Instantly inject tokens into the reserve pool for customers:</p>
++          <div className="ad-replenish-buttons">
++            {[10_000_000, 50_000_000, 100_000_000, 200_000_000].map((amt) => (
++              <button
++                key={amt}
++                disabled={busy}
++                onClick={() => replenish(amt)}
++                className="ad-replenish-btn"
++              >
++                +{formatTokens(amt)}
++              </button>
++            ))}
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++function LogsPanel({ logs }: { logs: AdminClaudeUsageRow[] }) {
++  const { a } = useA();
++  const c = a.claude;
++
++  return (
++    <div className="ad-claude-logs-view">
++      <div className="ad-card-head-sub">
++        <div>
++          <h3>{c.recentLogsTitle}</h3>
++          <p>{c.recentLogsSubtitle}</p>
++        </div>
++      </div>
++
++      {logs.length ? (
++        <div className="ad-table ad-logs-table">
++          <div className="ad-tr ad-th ad-logs-tr">
++            <span>{c.colUser}</span>
++            <span>{c.colEndpoint}</span>
++            <span>{c.colTokens}</span>
++            <span>{c.colIp}</span>
++            <span>{c.colTime}</span>
++          </div>
++
++          {logs.map((log) => (
++            <div key={log.id} className="ad-tr ad-logs-tr">
++              <div className="ad-user">
++                <b>{log.userName}</b>
++                <small className="ad-cust-badge">{log.customerId}</small>
++              </div>
++
++              <div>
++                <code className="ad-endpoint-tag">{log.endpoint}</code>
++              </div>
++
++              <div>
++                <b>{log.totalTokens.toLocaleString()}</b>
++                <small>in: {log.inputTokens.toLocaleString()} · out: {log.outputTokens.toLocaleString()}</small>
++              </div>
++
++              <div>
++                <span className="ad-ip-tag">{log.clientIp || "—"}</span>
++              </div>
++
++              <div className="ad-date">
++                <time>{new Date(log.createdAt).toLocaleString()}</time>
++              </div>
++            </div>
++          ))}
++        </div>
++      ) : (
++        <div className="ad-empty">
++          <Activity size={32} />
++          <b>{c.noLogs}</b>
++        </div>
++      )}
++    </div>
++  );
++}
++
++/* ═══════════ MODALS ═══════════ */
++
++function IssueKeyModal({
++  usersList,
++  onClose,
++  onDone,
++}: {
++  usersList: { id: string; customerId: string; name: string; email: string }[];
++  onClose: () => void;
++  onDone: (text: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++
++  const [selectedUser, setSelectedUser] = useState(usersList[0]?.id ?? "");
++  const [tokens, setTokens] = useState("1000000");
++  const [balanceMode, setBalanceMode] = useState<"replace" | "add">("replace");
++  const [label, setLabel] = useState("");
++  const [note, setNote] = useState("");
++  const [busy, setBusy] = useState(false);
++  const [searchU, setSearchU] = useState("");
++
++  const filteredUsers = useMemo(() => {
++    const q = searchU.trim().toLowerCase();
++    if (!q) return usersList;
++    return usersList.filter(
++      (u) =>
++        u.name.toLowerCase().includes(q) ||
++        u.email.toLowerCase().includes(q) ||
++        u.customerId.toLowerCase().includes(q)
++    );
++  }, [usersList, searchU]);
++
++  const submit = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (!selectedUser || busy) return;
++    setBusy(true);
++
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "issue-key",
++          userId: selectedUser,
++          initialTokens: parseInt(tokens, 10) || 0,
++          balanceMode,
++          label: label.trim() || undefined,
++          note: note.trim() || undefined,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onDone(`API-key issued successfully (${data.result?.apiKey?.slice(0, 15)}...)`);
++    } catch (err) {
++      alert(err instanceof Error ? err.message : "Error");
++      setBusy(false);
++    }
++  };
++
++  return (
++    <WalletModal title={c.issueModalTitle} subtitle="Generate new lvk-claude- key" onClose={onClose}>
++      <form onSubmit={submit}>
++        <label className="ad-field">
++          <span>{c.selectUser}</span>
++          <input
++            type="text"
++            className="ad-search-user-input"
++            placeholder="Filter users by name or email…"
++            value={searchU}
++            onChange={(e) => setSearchU(e.target.value)}
++          />
++          <select
++            value={selectedUser}
++            onChange={(e) => setSelectedUser(e.target.value)}
++            required
++            className="ad-user-select"
++          >
++            {filteredUsers.map((u) => (
++              <option key={u.id} value={u.id}>
++                {u.name} ({u.email}) · {u.customerId}
++              </option>
++            ))}
++          </select>
++        </label>
++
++        <label className="ad-field">
++          <span>{c.balanceMode}</span>
++          <div className="ad-segment ad-mode-segment" style={{ marginTop: "6px" }}>
++            <button
++              type="button"
++              className={balanceMode === "replace" ? "active" : ""}
++              onClick={() => setBalanceMode("replace")}
++            >
++              {c.balanceModeReplace}
++            </button>
++            <button
++              type="button"
++              className={balanceMode === "add" ? "active" : ""}
++              onClick={() => setBalanceMode("add")}
++            >
++              {c.balanceModeAdd}
++            </button>
++          </div>
++        </label>
++
++        <label className="ad-field">
++          <span>{c.initialTokens}</span>
++          <div>
++            <input
++              type="number"
++              min="0"
++              step="100000"
++              value={tokens}
++              onChange={(e) => setTokens(e.target.value)}
++            />
++            <span>tokens</span>
++          </div>
++        </label>
++
++        <div className="ad-quick-tokens">
++          {[0, 500_000, 1_000_000, 5_000_000, 10_000_000, 35_000_000].map((amt) => (
++            <button
++              type="button"
++              key={amt}
++              onClick={() => setTokens(String(amt))}
++              className={tokens === String(amt) ? "active" : ""}
++            >
++              {amt === 0 ? "0" : formatTokens(amt)}
++            </button>
++          ))}
++        </div>
++
++        <label className="ad-field">
++          <span>{c.keyLabel}</span>
++          <input
++            type="text"
++            value={label}
++            onChange={(e) => setLabel(e.target.value)}
++            placeholder={c.keyLabelPh}
++            className="ad-password-confirm"
++          />
++        </label>
++
++        <div className="ad-modal-actions">
++          <button type="button" className="ad-cancel" onClick={onClose} disabled={busy}>
++            {a.cancel}
++          </button>
++          <button type="submit" className="ad-submit" disabled={busy || !selectedUser}>
++            {busy ? <LoaderCircle className="ad-spin" size={15} /> : <><Sparkles size={15} />{c.issueBtn}</>}
++          </button>
++        </div>
++      </form>
++    </WalletModal>
++  );
++}
++
++function EditBalanceModal({
++  account,
++  onClose,
++  onDone,
++}: {
++  account: AdminTokenAccountRow;
++  onClose: () => void;
++  onDone: (text: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++
++  const [mode, setMode] = useState<"add" | "subtract" | "set">("add");
++  const [amount, setAmount] = useState("1000000");
++  const [note, setNote] = useState("");
++  const [busy, setBusy] = useState(false);
++
++  const numAmt = parseInt(amount, 10) || 0;
++  const preview =
++    mode === "add"
++      ? account.totalTokens + numAmt
++      : mode === "subtract"
++      ? Math.max(0, account.totalTokens - numAmt)
++      : numAmt;
++
++  const submit = async (e: React.FormEvent) => {
++    e.preventDefault();
++    if (busy) return;
++    setBusy(true);
++
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "update-balance",
++          accountId: account.id,
++          mode,
++          amountTokens: numAmt,
++          note: note.trim() || undefined,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onDone(`Balance updated: ${preview.toLocaleString()} tokens`);
++    } catch (err) {
++      alert(err instanceof Error ? err.message : "Error");
++      setBusy(false);
++    }
++  };
++
++  return (
++    <WalletModal
++      title={c.editBalanceTitle}
++      subtitle={`${account.name} (${account.customerId})`}
++      onClose={onClose}
++    >
++      <form onSubmit={submit}>
++        <div className="ad-segment ad-mode-segment">
++          <button
++            type="button"
++            className={mode === "add" ? "active" : ""}
++            onClick={() => setMode("add")}
++          >
++            {c.balanceAdd}
++          </button>
++          <button
++            type="button"
++            className={mode === "subtract" ? "active" : ""}
++            onClick={() => setMode("subtract")}
++          >
++            {c.balanceSubtract}
++          </button>
++          <button
++            type="button"
++            className={mode === "set" ? "active" : ""}
++            onClick={() => setMode("set")}
++          >
++            {c.balanceSet}
++          </button>
++        </div>
++
++        <label className="ad-field">
++          <span>{c.tokensAmount}</span>
++          <div>
++            <input
++              type="number"
++              min="0"
++              step="500000"
++              value={amount}
++              onChange={(e) => setAmount(e.target.value)}
++            />
++            <span>tokens</span>
++          </div>
++        </label>
++
++        <div className="ad-quick-tokens">
++          {mode === "set" &&
++            [0, 1_000_000, 5_000_000, 10_000_000, 35_000_000].map((amt) => (
++              <button
++                type="button"
++                key={amt}
++                onClick={() => setAmount(String(amt))}
++                className={amount === String(amt) ? "active" : ""}
++              >
++                {amt === 0 ? `0 (${c.quickZero})` : formatTokens(amt)}
++              </button>
++            ))}
++          {mode === "add" &&
++            [500_000, 1_000_000, 5_000_000, 10_000_000, 25_000_000].map((amt) => (
++              <button
++                type="button"
++                key={amt}
++                onClick={() => setAmount(String(amt))}
++                className={amount === String(amt) ? "active" : ""}
++              >
++                +{formatTokens(amt)}
++              </button>
++            ))}
++          {mode === "subtract" &&
++            [500_000, 1_000_000, 5_000_000, account.totalTokens].filter(Boolean).map((amt) => (
++              <button
++                type="button"
++                key={amt}
++                onClick={() => setAmount(String(amt))}
++                className={amount === String(amt) ? "active" : ""}
++              >
++                {amt === account.totalTokens ? `Всё (${formatTokens(amt)})` : `-${formatTokens(amt)}`}
++              </button>
++            ))}
++        </div>
++
++        <div className="ad-price-preview">
++          <div>
++            <small>Current Balance</small>
++            <b>{account.totalTokens.toLocaleString()}</b>
++          </div>
++          <span>→</span>
++          <div>
++            <small>After Adjustment ({mode === "set" ? "exact" : mode === "add" ? "+" : "-"})</small>
++            <b style={{ color: mode === "set" ? "#b49af2" : mode === "add" ? "#82c4a5" : "#cc909e" }}>
++              {preview.toLocaleString()}
++            </b>
++          </div>
++        </div>
++
++        <label className="ad-field">
++          <span>Note / reason:</span>
++          <input
++            type="text"
++            value={note}
++            onChange={(e) => setNote(e.target.value)}
++            placeholder="E.g. Bonus, manual top-up, refund…"
++            className="ad-password-confirm"
++          />
++        </label>
++
++        <div className="ad-modal-actions">
++          <button type="button" className="ad-cancel" onClick={onClose} disabled={busy}>
++            {a.cancel}
++          </button>
++          <button type="submit" className="ad-submit" disabled={busy}>
++            {busy ? <LoaderCircle className="ad-spin" size={15} /> : c.saveBalanceBtn}
++          </button>
++        </div>
++      </form>
++    </WalletModal>
++  );
++}
++
++function RegenKeyModal({
++  account,
++  onClose,
++  onDone,
++}: {
++  account: AdminTokenAccountRow;
++  onClose: () => void;
++  onDone: (text: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++  const [busy, setBusy] = useState(false);
++
++  const confirm = async () => {
++    setBusy(true);
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "regenerate-key",
++          accountId: account.id,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onDone(`Key regenerated: ${data.result?.apiKey?.slice(0, 15)}...`);
++    } catch (err) {
++      alert(err instanceof Error ? err.message : "Error");
++      setBusy(false);
++    }
++  };
++
++  return (
++    <WalletModal
++      title={c.confirmRegenTitle}
++      subtitle={`${account.name} (${account.customerId})`}
++      onClose={onClose}
++    >
++      <div className="ad-warning">
++        <TriangleAlert size={18} />
++        <div>{c.confirmRegenWarn}</div>
++      </div>
++
++      <div className="ad-modal-actions">
++        <button type="button" className="ad-cancel" onClick={onClose} disabled={busy}>
++          {a.cancel}
++        </button>
++        <button type="button" className="ad-submit danger" onClick={confirm} disabled={busy}>
++          {busy ? <LoaderCircle className="ad-spin" size={15} /> : <><RefreshCw size={15} />{c.regenKey}</>}
++        </button>
++      </div>
++    </WalletModal>
++  );
++}
++
++function DeleteKeyModal({
++  account,
++  onClose,
++  onDone,
++}: {
++  account: AdminTokenAccountRow;
++  onClose: () => void;
++  onDone: (text: string) => Promise<void>;
++}) {
++  const { a } = useA();
++  const c = a.claude;
++  const [resetBalance, setResetBalance] = useState(false);
++  const [busy, setBusy] = useState(false);
++
++  const confirm = async () => {
++    setBusy(true);
++    try {
++      const res = await fetch("/api/admin/claude", {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          action: "delete-key",
++          accountId: account.id,
++          resetBalance,
++        }),
++      });
++      const data = await res.json();
++      if (!res.ok) throw new Error(data.error ?? "SERVER");
++      await onDone(`API-key for ${account.name} deleted${resetBalance ? " (balance reset)" : ""}`);
++    } catch (err) {
++      alert(err instanceof Error ? err.message : "Error");
++      setBusy(false);
++    }
++  };
++
++  return (
++    <WalletModal
++      title={c.confirmDeleteTitle}
++      subtitle={`${account.name} (${account.customerId})`}
++      onClose={onClose}
++    >
++      <div className="ad-warning">
++        <TriangleAlert size={18} />
++        <div>
++          <p>{c.confirmDeleteWarn}</p>
++          {account.totalTokens > 0 && (
++            <p style={{ marginTop: "6px", fontSize: "11px", color: "#e4dbeb" }}>
++              Текущий баланс токенов: <b>{account.totalTokens.toLocaleString()}</b>
++            </p>
++          )}
++        </div>
++      </div>
++
++      <label
++        style={{
++          display: "flex",
++          alignItems: "center",
++          gap: "9px",
++          padding: "10px 12px",
++          background: "#18141d",
++          border: "1px solid #3c3244",
++          borderRadius: "8px",
++          marginBottom: "16px",
++          cursor: "pointer",
++        }}
++      >
++        <input
++          type="checkbox"
++          checked={resetBalance}
++          onChange={(e) => setResetBalance(e.target.checked)}
++          style={{ width: "16px", height: "16px", accentColor: "#d99ba9" }}
++        />
++        <span style={{ fontSize: "11px", color: resetBalance ? "#f3b4c1" : "#bcaec3" }}>
++          {c.deleteResetBalance}
++        </span>
++      </label>
++
++      <div className="ad-modal-actions">
++        <button type="button" className="ad-cancel" onClick={onClose} disabled={busy}>
++          {a.cancel}
++        </button>
++        <button type="button" className="ad-submit danger" onClick={confirm} disabled={busy}>
++          {busy ? <LoaderCircle className="ad-spin" size={15} /> : <><Trash2 size={15} />{c.deleteKey}</>}
++        </button>
++      </div>
++    </WalletModal>
++  );
++}
+diff --git a/src/lib/admin-i18n.ts b/src/lib/admin-i18n.ts
+index 8d9bbee..de90eba 100644
+--- a/src/lib/admin-i18n.ts
++++ b/src/lib/admin-i18n.ts
+@@ -178,6 +178,12 @@ const ru = {
+     fAll: "Все ключи",
+     fActive: "Активные",
+     fPaused: "Приостановленные",
++    deleteResetBalance: "Также сбросить баланс токенов пользователя (обнулить кошелёк)",
++    balanceModeReplace: "Установить ровно (=)",
++    balanceModeAdd: "Добавить к текущему (+)",
++    quickZero: "Обнулить баланс",
++    quick1M: "Установить 1M",
++    quickActions: "Быстрые действия",
+   },
+ };
+ export type AdminDict = typeof ru;
+@@ -351,6 +357,12 @@ const en: AdminDict = {
+     fAll: "All Keys",
+     fActive: "Active",
+     fPaused: "Suspended",
++    deleteResetBalance: "Also reset user's token balance (wipe wallet)",
++    balanceModeReplace: "Set exact balance (=)",
++    balanceModeAdd: "Add to current balance (+)",
++    quickZero: "Zero balance",
++    quick1M: "Set 1M",
++    quickActions: "Quick actions",
+   },
+ };
+ 
+@@ -523,6 +535,12 @@ const zh: AdminDict = {
+     fAll: "全部密钥",
+     fActive: "正常",
+     fPaused: "已暂停",
++    deleteResetBalance: "同时清空用户的代币余额",
++    balanceModeReplace: "设置为准确值 (=)",
++    balanceModeAdd: "增加到当前余额 (+)",
++    quickZero: "清零余额",
++    quick1M: "设置为 1M",
++    quickActions: "快捷操作",
+   },
+ };
+ 
+diff --git a/src/lib/admin.ts b/src/lib/admin.ts
+index 06e8f12..61edf3a 100644
+--- a/src/lib/admin.ts
++++ b/src/lib/admin.ts
+@@ -498,9 +498,9 @@ export async function getAdminClaudeData(): Promise<AdminClaudeData> {
+ 
+ export async function adminIssueTokenKey(
+   actor: SafeUser,
+-  params: { userId: string; initialTokens?: number; label?: string; note?: string }
++  params: { userId: string; initialTokens?: number; label?: string; note?: string; balanceMode?: "replace" | "add" }
+ ) {
+-  const { userId, initialTokens = 0, label, note } = params;
++  const { userId, initialTokens = 0, label, note, balanceMode = "replace" } = params;
+   adminEnsure(validId(userId), "INVALID_USER");
+   return db.transaction(async (tx) => {
+     const target = await targetUser(tx, userId);
+@@ -530,7 +530,28 @@ export async function adminIssueTokenKey(
+       accountId = created.id;
+     }
+ 
+-    if (initialTokens > 0) {
++    if (initialTokens >= 0 && balanceMode === "replace") {
++      await tx.insert(tokenBalances).values({
++        userId: target.id,
++        modelId: activeModel.id,
++        outputTokens: initialTokens,
++        inputTokens: 0,
++      }).onConflictDoUpdate({
++        target: [tokenBalances.userId, tokenBalances.modelId],
++        set: {
++          outputTokens: initialTokens,
++          inputTokens: 0,
++          updatedAt: new Date(),
++        },
++      });
++
++      if (initialTokens > 0) {
++        await tx.update(tokenBank).set({
++          availableTokens: sql`greatest(0, ${tokenBank.availableTokens} - ${initialTokens})`,
++          updatedAt: new Date(),
++        }).where(eq(tokenBank.productId, activeModel.productId));
++      }
++    } else if (initialTokens > 0) {
+       await tx.insert(tokenBalances).values({
+         userId: target.id,
+         modelId: activeModel.id,
+@@ -553,7 +574,7 @@ export async function adminIssueTokenKey(
+       actorUserId: actor.id,
+       targetUserId: target.id,
+       action: "claude.key_issued",
+-      details: { accountId, initialTokens, label, ...(note ? { note } : {}) },
++      details: { accountId, initialTokens, balanceMode, label, ...(note ? { note } : {}) },
+     });
+ 
+     return { ok: true, accountId, apiKey: newKey };
+@@ -655,18 +676,22 @@ export async function adminToggleTokenAccount(actor: SafeUser, accountId: string
+   });
+ }
+ 
+-export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string) {
++export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string, resetBalance?: boolean) {
+   adminEnsure(validId(accountId), "INVALID_ACCOUNT");
+   return db.transaction(async (tx) => {
+     const [account] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.id, accountId)).for("update");
+     adminEnsure(account, "ACCOUNT_NOT_FOUND", 404);
+ 
++    if (resetBalance) {
++      await tx.delete(tokenBalances).where(eq(tokenBalances.userId, account.userId));
++    }
++
+     await tx.delete(tokenAccounts).where(eq(tokenAccounts.id, accountId));
+     await tx.insert(adminAudit).values({
+       actorUserId: actor.id,
+       targetUserId: account.userId,
+       action: "claude.key_deleted",
+-      details: { accountId, ...(note ? { note } : {}) },
++      details: { accountId, resetBalance: Boolean(resetBalance), ...(note ? { note } : {}) },
+     });
+ 
+     return { ok: true };

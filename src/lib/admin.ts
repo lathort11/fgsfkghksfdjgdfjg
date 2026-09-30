@@ -498,9 +498,9 @@ export async function getAdminClaudeData(): Promise<AdminClaudeData> {
 
 export async function adminIssueTokenKey(
   actor: SafeUser,
-  params: { userId: string; initialTokens?: number; label?: string; note?: string }
+  params: { userId: string; initialTokens?: number; label?: string; note?: string; balanceMode?: "replace" | "add" }
 ) {
-  const { userId, initialTokens = 0, label, note } = params;
+  const { userId, initialTokens = 0, label, note, balanceMode = "replace" } = params;
   adminEnsure(validId(userId), "INVALID_USER");
   return db.transaction(async (tx) => {
     const target = await targetUser(tx, userId);
@@ -530,7 +530,28 @@ export async function adminIssueTokenKey(
       accountId = created.id;
     }
 
-    if (initialTokens > 0) {
+    if (initialTokens >= 0 && balanceMode === "replace") {
+      await tx.insert(tokenBalances).values({
+        userId: target.id,
+        modelId: activeModel.id,
+        outputTokens: initialTokens,
+        inputTokens: 0,
+      }).onConflictDoUpdate({
+        target: [tokenBalances.userId, tokenBalances.modelId],
+        set: {
+          outputTokens: initialTokens,
+          inputTokens: 0,
+          updatedAt: new Date(),
+        },
+      });
+
+      if (initialTokens > 0) {
+        await tx.update(tokenBank).set({
+          availableTokens: sql`greatest(0, ${tokenBank.availableTokens} - ${initialTokens})`,
+          updatedAt: new Date(),
+        }).where(eq(tokenBank.productId, activeModel.productId));
+      }
+    } else if (initialTokens > 0) {
       await tx.insert(tokenBalances).values({
         userId: target.id,
         modelId: activeModel.id,
@@ -553,7 +574,7 @@ export async function adminIssueTokenKey(
       actorUserId: actor.id,
       targetUserId: target.id,
       action: "claude.key_issued",
-      details: { accountId, initialTokens, label, ...(note ? { note } : {}) },
+      details: { accountId, initialTokens, balanceMode, label, ...(note ? { note } : {}) },
     });
 
     return { ok: true, accountId, apiKey: newKey };
@@ -655,18 +676,22 @@ export async function adminToggleTokenAccount(actor: SafeUser, accountId: string
   });
 }
 
-export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string) {
+export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string, resetBalance?: boolean) {
   adminEnsure(validId(accountId), "INVALID_ACCOUNT");
   return db.transaction(async (tx) => {
     const [account] = await tx.select().from(tokenAccounts).where(eq(tokenAccounts.id, accountId)).for("update");
     adminEnsure(account, "ACCOUNT_NOT_FOUND", 404);
+
+    if (resetBalance) {
+      await tx.delete(tokenBalances).where(eq(tokenBalances.userId, account.userId));
+    }
 
     await tx.delete(tokenAccounts).where(eq(tokenAccounts.id, accountId));
     await tx.insert(adminAudit).values({
       actorUserId: actor.id,
       targetUserId: account.userId,
       action: "claude.key_deleted",
-      details: { accountId, ...(note ? { note } : {}) },
+      details: { accountId, resetBalance: Boolean(resetBalance), ...(note ? { note } : {}) },
     });
 
     return { ok: true };

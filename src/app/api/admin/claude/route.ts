@@ -37,7 +37,8 @@ export async function POST(req: Request) {
         const initialTokens = typeof raw.initialTokens === "number" ? Math.max(0, Math.trunc(raw.initialTokens)) : 0;
         const label = typeof raw.label === "string" ? raw.label.trim().slice(0, 80) : undefined;
         const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
-        result = await adminIssueTokenKey(admin, { userId, initialTokens, label, note });
+        const balanceMode = raw.balanceMode === "add" ? "add" : "replace";
+        result = await adminIssueTokenKey(admin, { userId, initialTokens, label, note, balanceMode });
         break;
       }
 
@@ -74,7 +75,8 @@ export async function POST(req: Request) {
         const accountId = String(raw.accountId ?? "").trim();
         adminEnsure(accountId.length > 0, "ACCOUNT_REQUIRED");
         const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
-        result = await adminDeleteTokenAccount(admin, accountId, note);
+        const resetBalance = Boolean(raw.resetBalance);
+        result = await adminDeleteTokenAccount(admin, accountId, note, resetBalance);
         break;
       }
 

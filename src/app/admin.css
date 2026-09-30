@@ -97,6 +97,10 @@
 .ad-btn-icon.success:hover{background:#1d3527;border-color:#2e5c41}
 .ad-btn-icon.danger{color:#d48b9b}
 .ad-btn-icon.danger:hover{background:#3a1f26;border-color:#5c2d37}
+.ad-quick-btn{height:28px;padding:0 8px;font-size:10px;font-weight:600;border-radius:6px;border:1px solid #3d314c;background:#1e1728;color:#b49af2;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center}
+.ad-quick-btn:hover{background:#322346;color:#e8daf7;border-color:#5c427a}
+.ad-quick-btn.danger{border-color:#562d37;background:#2a171d;color:#d48b9b}
+.ad-quick-btn.danger:hover{background:#401e27;color:#f5b0bd}
 .ad-claude-models-view,.ad-claude-bank-view,.ad-claude-logs-view{padding:22px}
 .ad-card-head-sub{margin-bottom:20px}
 .ad-card-head-sub h3{font-size:15px;font-weight:600;color:#eeeaf4;margin:0 0 4px}
