@@ -89,6 +89,29 @@ export function AdminClaudePanel({
     }
   };
 
+  const quickSetBalance = async (account: AdminTokenAccountRow, amount: number) => {
+    const label = amount === 0 ? "обнулить баланс" : `установить баланс ${amount.toLocaleString()} токенов`;
+    if (!window.confirm(`Вы уверены, что хотите ${label} для ${account.name}?`)) return;
+    try {
+      const res = await fetch("/api/admin/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-balance",
+          accountId: account.id,
+          mode: "set",
+          amountTokens: amount,
+          note: `Quick set ${amount} tokens`,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "SERVER");
+      await onChanged(`Баланс ${account.name}: ${amount.toLocaleString()} токенов`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error");
+    }
+  };
+
   return (
     <div className="ad-claude-space">
       {/* ── Top Stat Cards ── */}
@@ -289,6 +312,22 @@ export function AdminClaudePanel({
                       {/* Actions */}
                       <div className="ad-actions">
                         <button
+                          type="button"
+                          title="Быстро установить ровно 1 000 000 токенов"
+                          onClick={() => quickSetBalance(account, 1_000_000)}
+                          className="ad-quick-btn"
+                        >
+                          1M
+                        </button>
+                        <button
+                          type="button"
+                          title="Быстро обнулить баланс токенов (0)"
+                          onClick={() => quickSetBalance(account, 0)}
+                          className="ad-quick-btn danger"
+                        >
+                          0
+                        </button>
+                        <button
                           title={c.editBalance}
                           onClick={() => setBalanceModal(account)}
                           className="ad-btn-icon"
@@ -410,13 +449,15 @@ function ModelsPanel({
   const { a } = useA();
   const c = a.claude;
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [rateCents, setRateCents] = useState(30);
+  const [inputRateCents, setInputRateCents] = useState(30);
+  const [outputRateCents, setOutputRateCents] = useState(30);
   const [isActive, setIsActive] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const startEdit = (m: AdminTokenModel) => {
     setEditingId(m.id);
-    setRateCents(m.outputPerMillionCents);
+    setInputRateCents(m.inputPerMillionCents);
+    setOutputRateCents(m.outputPerMillionCents);
     setIsActive(m.isActive);
   };
 
@@ -429,8 +470,8 @@ function ModelsPanel({
         body: JSON.stringify({
           action: "update-model",
           modelId: model.id,
-          inputRateCents: rateCents,
-          outputRateCents: rateCents,
+          inputRateCents,
+          outputRateCents,
           isActive,
         }),
       });
@@ -474,15 +515,29 @@ function ModelsPanel({
                 {isEditing ? (
                   <div className="ad-model-edit-form">
                     <label>
-                      <span>Rate per 1,000,000 tokens ($):</span>
+                      <span>Input rate per 1M tokens ($):</span>
                       <div className="ad-rate-input-wrap">
                         <span>$</span>
                         <input
                           type="number"
                           step="0.01"
                           min="0.01"
-                          value={(rateCents / 100).toFixed(2)}
-                          onChange={(e) => setRateCents(Math.round(parseFloat(e.target.value || "0") * 100))}
+                          value={(inputRateCents / 100).toFixed(2)}
+                          onChange={(e) => setInputRateCents(Math.round(parseFloat(e.target.value || "0") * 100))}
+                        />
+                      </div>
+                    </label>
+
+                    <label style={{ marginTop: "8px" }}>
+                      <span>Output rate per 1M tokens ($):</span>
+                      <div className="ad-rate-input-wrap">
+                        <span>$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={(outputRateCents / 100).toFixed(2)}
+                          onChange={(e) => setOutputRateCents(Math.round(parseFloat(e.target.value || "0") * 100))}
                         />
                       </div>
                     </label>
@@ -517,8 +572,10 @@ function ModelsPanel({
                   <>
                     <div className="ad-model-rate-display">
                       <small>{c.ratePer1M}</small>
-                      <b>${(model.outputPerMillionCents / 100).toFixed(2)}</b>
-                      <p>Fixed rate per 1,000,000 tokens</p>
+                      <b>
+                        ${(model.inputPerMillionCents / 100).toFixed(2)} in · ${(model.outputPerMillionCents / 100).toFixed(2)} out
+                      </b>
+                      <p>Per 1,000,000 input / output tokens</p>
                     </div>
 
                     <div className="ad-model-footer">
@@ -697,6 +754,7 @@ function IssueKeyModal({
 
   const [selectedUser, setSelectedUser] = useState(usersList[0]?.id ?? "");
   const [tokens, setTokens] = useState("1000000");
+  const [balanceMode, setBalanceMode] = useState<"replace" | "add">("replace");
   const [label, setLabel] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -726,6 +784,7 @@ function IssueKeyModal({
           action: "issue-key",
           userId: selectedUser,
           initialTokens: parseInt(tokens, 10) || 0,
+          balanceMode,
           label: label.trim() || undefined,
           note: note.trim() || undefined,
         }),
@@ -766,6 +825,26 @@ function IssueKeyModal({
         </label>
 
         <label className="ad-field">
+          <span>{c.balanceMode}</span>
+          <div className="ad-segment ad-mode-segment" style={{ marginTop: "6px" }}>
+            <button
+              type="button"
+              className={balanceMode === "replace" ? "active" : ""}
+              onClick={() => setBalanceMode("replace")}
+            >
+              {c.balanceModeReplace}
+            </button>
+            <button
+              type="button"
+              className={balanceMode === "add" ? "active" : ""}
+              onClick={() => setBalanceMode("add")}
+            >
+              {c.balanceModeAdd}
+            </button>
+          </div>
+        </label>
+
+        <label className="ad-field">
           <span>{c.initialTokens}</span>
           <div>
             <input
@@ -780,14 +859,14 @@ function IssueKeyModal({
         </label>
 
         <div className="ad-quick-tokens">
-          {[500_000, 1_000_000, 5_000_000, 10_000_000].map((amt) => (
+          {[0, 500_000, 1_000_000, 5_000_000, 10_000_000, 35_000_000].map((amt) => (
             <button
               type="button"
               key={amt}
               onClick={() => setTokens(String(amt))}
               className={tokens === String(amt) ? "active" : ""}
             >
-              {formatTokens(amt)}
+              {amt === 0 ? "0" : formatTokens(amt)}
             </button>
           ))}
         </div>
@@ -913,16 +992,39 @@ function EditBalanceModal({
         </label>
 
         <div className="ad-quick-tokens">
-          {[1_000_000, 5_000_000, 10_000_000, 25_000_000].map((amt) => (
-            <button
-              type="button"
-              key={amt}
-              onClick={() => setAmount(String(amt))}
-              className={amount === String(amt) ? "active" : ""}
-            >
-              {formatTokens(amt)}
-            </button>
-          ))}
+          {mode === "set" &&
+            [0, 1_000_000, 5_000_000, 10_000_000, 35_000_000].map((amt) => (
+              <button
+                type="button"
+                key={amt}
+                onClick={() => setAmount(String(amt))}
+                className={amount === String(amt) ? "active" : ""}
+              >
+                {amt === 0 ? `0 (${c.quickZero})` : formatTokens(amt)}
+              </button>
+            ))}
+          {mode === "add" &&
+            [500_000, 1_000_000, 5_000_000, 10_000_000, 25_000_000].map((amt) => (
+              <button
+                type="button"
+                key={amt}
+                onClick={() => setAmount(String(amt))}
+                className={amount === String(amt) ? "active" : ""}
+              >
+                +{formatTokens(amt)}
+              </button>
+            ))}
+          {mode === "subtract" &&
+            [500_000, 1_000_000, 5_000_000, account.totalTokens].filter(Boolean).map((amt) => (
+              <button
+                type="button"
+                key={amt}
+                onClick={() => setAmount(String(amt))}
+                className={amount === String(amt) ? "active" : ""}
+              >
+                {amt === account.totalTokens ? `Всё (${formatTokens(amt)})` : `-${formatTokens(amt)}`}
+              </button>
+            ))}
         </div>
 
         <div className="ad-price-preview">
@@ -932,8 +1034,10 @@ function EditBalanceModal({
           </div>
           <span>→</span>
           <div>
-            <small>After Adjustment</small>
-            <b>{preview.toLocaleString()}</b>
+            <small>After Adjustment ({mode === "set" ? "exact" : mode === "add" ? "+" : "-"})</small>
+            <b style={{ color: mode === "set" ? "#b49af2" : mode === "add" ? "#82c4a5" : "#cc909e" }}>
+              {preview.toLocaleString()}
+            </b>
           </div>
         </div>
 
@@ -1028,6 +1132,7 @@ function DeleteKeyModal({
 }) {
   const { a } = useA();
   const c = a.claude;
+  const [resetBalance, setResetBalance] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const confirm = async () => {
@@ -1039,11 +1144,12 @@ function DeleteKeyModal({
         body: JSON.stringify({
           action: "delete-key",
           accountId: account.id,
+          resetBalance,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "SERVER");
-      await onDone(`API-key for ${account.name} deleted`);
+      await onDone(`API-key for ${account.name} deleted${resetBalance ? " (balance reset)" : ""}`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Error");
       setBusy(false);
@@ -1058,8 +1164,39 @@ function DeleteKeyModal({
     >
       <div className="ad-warning">
         <TriangleAlert size={18} />
-        <div>{c.confirmDeleteWarn}</div>
+        <div>
+          <p>{c.confirmDeleteWarn}</p>
+          {account.totalTokens > 0 && (
+            <p style={{ marginTop: "6px", fontSize: "11px", color: "#e4dbeb" }}>
+              Текущий баланс токенов: <b>{account.totalTokens.toLocaleString()}</b>
+            </p>
+          )}
+        </div>
       </div>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "9px",
+          padding: "10px 12px",
+          background: "#18141d",
+          border: "1px solid #3c3244",
+          borderRadius: "8px",
+          marginBottom: "16px",
+          cursor: "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={resetBalance}
+          onChange={(e) => setResetBalance(e.target.checked)}
+          style={{ width: "16px", height: "16px", accentColor: "#d99ba9" }}
+        />
+        <span style={{ fontSize: "11px", color: resetBalance ? "#f3b4c1" : "#bcaec3" }}>
+          {c.deleteResetBalance}
+        </span>
+      </label>
 
       <div className="ad-modal-actions">
         <button type="button" className="ad-cancel" onClick={onClose} disabled={busy}>
@@ -1072,4 +1209,3 @@ function DeleteKeyModal({
     </WalletModal>
   );
 }
-
