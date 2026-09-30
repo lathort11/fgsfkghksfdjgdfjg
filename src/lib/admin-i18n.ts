@@ -2,14 +2,16 @@ import type { Locale } from "@/lib/i18n";
 
 /* Admin panel copy. `en` and `zh` are typed against `ru` — a missing key is a compile error. */
 const ru = {
-  tab: { overview: "Обзор", income: "Доход", users: "Пользователи", products: "Продукты", claude: "Claude API", audit: "Журнал действий" },
-  heading: { overview: "Добро пожаловать", income: "Доход и выручка", users: "Пользователи", products: "Продукты", claude: "Claude API и Ключи", audit: "Аудит действий" },
+  tab: { overview: "Обзор", income: "Доход", users: "Пользователи", products: "Продукты", claude: "Claude API", discounts: "Скидки и цены", news: "Новости", audit: "Журнал действий" },
+  heading: { overview: "Добро пожаловать", income: "Доход и выручка", users: "Пользователи", products: "Продукты", claude: "Claude API и Ключи", discounts: "Управление скидками и ценами", news: "Новости платформы", audit: "Аудит действий" },
   subtitle: {
     overview: "Ключевые показатели и быстрые действия — в одном месте.",
     income: "Продажи, комиссии и динамика по дням. Пополнения — это деньги клиентов, а не доход.",
     users: "Управляйте доступом, балансами и выдачами пользователей.",
     products: "Цены и видимость товаров. Скрытый продукт нельзя купить, история заказов сохраняется.",
     claude: "Управление API-ключами, балансами токенов клиентов, тарифами моделей и пулом банка.",
+    discounts: "Управление спецпредложениями, поводом акции («В честь чего») и скидочными ценами.",
+    news: "Публикация новостей, обновлений, скидок и технических оповещений для пользователей.",
     audit: "Хронология административных изменений без чувствительных данных.",
   },
   action: { ban: "Заблокировать пользователя", unban: "Снять блокировку", credit: "Начислить баланс", "grant-product": "Выдать товар" } as Record<string, string>,
@@ -198,14 +200,16 @@ const ru = {
 export type AdminDict = typeof ru;
 
 const en: AdminDict = {
-  tab: { overview: "Overview", income: "Income", users: "Users", products: "Products", claude: "Claude API", audit: "Action log" },
-  heading: { overview: "Welcome", income: "Income & revenue", users: "Users", products: "Products", claude: "Claude API & Keys", audit: "Action audit" },
+  tab: { overview: "Overview", income: "Income", users: "Users", products: "Products", claude: "Claude API", discounts: "Discounts & Pricing", news: "News", audit: "Action log" },
+  heading: { overview: "Welcome", income: "Income & revenue", users: "Users", products: "Products", claude: "Claude API & Keys", discounts: "Discounts & Pricing", news: "Platform News", audit: "Action audit" },
   subtitle: {
     overview: "Key metrics and quick actions — in one place.",
     income: "Sales, fees and daily trends. Top-ups are customer funds, not income.",
     users: "Manage user access, balances and grants.",
     products: "Prices and product visibility. A hidden product can't be bought; order history is preserved.",
     claude: "Manage customer API keys, token balances, model pricing and token bank pool.",
+    discounts: "Manage promotional campaigns, discount reasons, and token rates.",
+    news: "Publish news, updates, discounts, and maintenance announcements.",
     audit: "A timeline of administrative changes without sensitive data.",
   },
   action: { ban: "Ban user", unban: "Lift ban", credit: "Credit balance", "grant-product": "Grant product" },
@@ -385,14 +389,16 @@ const en: AdminDict = {
 };
 
 const zh: AdminDict = {
-  tab: { overview: "概览", income: "收入", users: "用户", products: "商品", claude: "Claude API", audit: "操作日志" },
-  heading: { overview: "欢迎", income: "收入与营收", users: "用户", products: "商品", claude: "Claude API 与密钥", audit: "操作审计" },
+  tab: { overview: "概览", income: "收入", users: "用户", products: "商品", claude: "Claude API", discounts: "折扣与定价", news: "新闻", audit: "操作日志" },
+  heading: { overview: "欢迎", income: "收入与营收", users: "用户", products: "商品", claude: "Claude API 与密钥", discounts: "折扣与价格管理", news: "平台新闻与公告", audit: "操作审计" },
   subtitle: {
     overview: "关键指标与快捷操作，尽在一处。",
     income: "销售额、手续费与每日趋势。用户充值属于客户资金，不计入收入。",
     users: "管理用户权限、余额与发放。",
     products: "商品价格与可见性。隐藏的商品无法购买，订单历史会保留。",
     claude: "管理客户 API 密钥、代币余额、模型费率与代币资金池。",
+    discounts: "管理促销活动、折扣原因与代币优惠价格。",
+    news: "发布面向用户的新闻、优惠、更新与维护通知。",
     audit: "管理操作时间线，不含敏感数据。",
   },
   action: { ban: "封禁用户", unban: "解除封禁", credit: "入账余额", "grant-product": "发放商品" },

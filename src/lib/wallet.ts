@@ -83,7 +83,7 @@ export async function createDeposit(userId: string, body: Record<string, unknown
   const key = idempotency(body.idempotencyKey);
   const rawAsset = typeof body.asset === "string" ? body.asset : "Crypto Bot";
   const asset = (!rawAsset || rawAsset === "Crypto Bot" || rawAsset === "crypto_bot" || rawAsset === "Crypto Pay") ? "Crypto Bot" : rawAsset;
-  ensure(["Crypto Bot", "USDT", "TON", "BTC", "ETH"].includes(asset), "INVALID_METHOD");
+  ensure(["Crypto Bot", "USDT", "TON", "BTC", "ETH", "LTC", "BNB", "TRX", "USDC"].includes(asset), "INVALID_METHOD");
   const current = await account(userId);
   return db.transaction(async (tx) => {
     const w = await lock(tx, current.id); usable(w);

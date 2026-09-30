@@ -19,15 +19,28 @@ export function Presets({ value, onChange }: { value: string; onChange: (s: stri
 }
 export function AssetSelect({ value, onChange, id = "deposit-asset" }: { value: string; onChange: (s: string) => void; id?: string }) {
   const { w } = useW();
+  const getBadgeTag = (v: string) => {
+    if (v === "Crypto Bot") return "CRYPTO BOT";
+    return `CRYPTO BOT · ${v}`;
+  };
+
   return (
     <div className="wk-asset-field">
       <label htmlFor={id}>{w.methodLabel}</label>
       <div className="wk-asset-select">
-        <CryptoBadge asset="Crypto Bot" className="w-8 h-8" />
+        <CryptoBadge asset={value} className="w-8 h-8" />
         <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-          <option value="Crypto Bot">{w.cryptoBotMethod ?? "Crypto Bot · Telegram"}</option>
+          <option value="USDT">USDT · Tether (Crypto Bot)</option>
+          <option value="TON">TON · Toncoin (Crypto Bot)</option>
+          <option value="BTC">BTC · Bitcoin (Crypto Bot)</option>
+          <option value="ETH">ETH · Ethereum (Crypto Bot)</option>
+          <option value="LTC">LTC · Litecoin (Crypto Bot)</option>
+          <option value="BNB">BNB · Binance Coin (Crypto Bot)</option>
+          <option value="TRX">TRX · TRON (Crypto Bot)</option>
+          <option value="USDC">USDC · USD Coin (Crypto Bot)</option>
+          <option value="Crypto Bot">Crypto Bot · Любая валюта / Any crypto</option>
         </select>
-        <span className="wk-select-tag">{w.cryptoBotTag ?? "TELEGRAM BOT"}</span>
+        <span className="wk-select-tag">{getBadgeTag(value)}</span>
       </div>
     </div>
   );

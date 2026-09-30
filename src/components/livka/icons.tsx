@@ -251,11 +251,51 @@ export function CryptoBotMark(p: P) {
   );
 }
 
+export function LtcMark(p: P) {
+  return (
+    <svg viewBox="0 0 32 32" {...p}>
+      <circle cx="16" cy="16" r="16" fill="#345d9d" />
+      <path fill="#fff" d="M12.5 7h4v11.5l4-1.2v3.2l-4 1.2V25h-4v-1.2l-2.5.8v-3.2l2.5-.8V7Z" />
+    </svg>
+  );
+}
+
+export function TrxMark(p: P) {
+  return (
+    <svg viewBox="0 0 32 32" {...p}>
+      <circle cx="16" cy="16" r="16" fill="#eb0029" />
+      <path fill="#fff" d="M7 8.5 24 6l-6.5 19.5L7 8.5Zm3.2 2.2 4.4 7.6 7-10.4-11.4 2.8Z" />
+    </svg>
+  );
+}
+
+export function BnbMark(p: P) {
+  return (
+    <svg viewBox="0 0 32 32" {...p}>
+      <circle cx="16" cy="16" r="16" fill="#F3BA2F" />
+      <path fill="#fff" d="M16 6.5 12.3 10.2l3.7 3.7 3.7-3.7L16 6.5Zm-7.3 7.3-3.7 3.7 3.7 3.7 3.7-3.7-3.7-3.7Zm14.6 0-3.7 3.7 3.7 3.7 3.7-3.7-3.7-3.7ZM16 16.5l-3.7 3.7 3.7 3.7 3.7-3.7-3.7-3.7Z" />
+    </svg>
+  );
+}
+
+export function UsdcMark(p: P) {
+  return (
+    <svg viewBox="0 0 32 32" {...p}>
+      <circle cx="16" cy="16" r="16" fill="#2775CA" />
+      <path fill="#fff" d="M16 7a9 9 0 1 0 9 9 9 9 0 0 0-9-9Zm1.2 13.8a2.6 2.6 0 0 1-2.4-.4v-4.2a2.3 2.3 0 0 1 1.7.9l1.4-1.4a4.1 4.1 0 0 0-3.1-1.3v-1.5h-1.6v1.5a3.4 3.4 0 0 0-2.8 3.5 3.4 3.4 0 0 0 3 3.4v4.4a2.7 2.7 0 0 1-2-.9l-1.4 1.4a4.3 4.3 0 0 0 3.4 1.3v1.5h1.6v-1.5a3.6 3.6 0 0 0 3.2-3.6 3.3 3.3 0 0 0-1-2.6Z" />
+    </svg>
+  );
+}
+
 export function CryptoBadge({ asset, ...rest }: P & { asset: string }) {
   if (asset === "Crypto Bot" || asset === "crypto_bot" || asset === "Crypto Pay") return <CryptoBotMark {...rest} />;
   if (asset === "USDT") return <UsdtMark {...rest} />;
   if (asset === "BTC") return <BtcMark {...rest} />;
   if (asset === "ETH") return <EthMark {...rest} />;
   if (asset === "TON") return <TonMark {...rest} />;
+  if (asset === "LTC") return <LtcMark {...rest} />;
+  if (asset === "TRX") return <TrxMark {...rest} />;
+  if (asset === "BNB") return <BnbMark {...rest} />;
+  if (asset === "USDC") return <UsdcMark {...rest} />;
   return <CryptoBotMark {...rest} />;
 }

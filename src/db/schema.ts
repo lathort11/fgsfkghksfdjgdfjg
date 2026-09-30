@@ -260,3 +260,38 @@ export const tokenUsage = pgTable("site_token_usage", {
 export type TokenModelRow = typeof tokenModels.$inferSelect;
 export type TokenAccountRow = typeof tokenAccounts.$inferSelect;
 export type TokenUsageRow = typeof tokenUsage.$inferSelect;
+
+/** Configurable promotional discounts and campaign reasons */
+export const discounts = pgTable("site_discounts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  target: text("target").notNull().default("tokens"),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  reason: text("reason").notNull().default("В честь открытия"),
+  discountType: text("discount_type").notNull().default("fixed_price"),
+  originalPriceCents: integer("original_price_cents").notNull().default(30),
+  discountPriceCents: integer("discount_price_cents").notNull().default(10),
+  percentOff: integer("percent_off").notNull().default(67),
+  badge: text("badge").notNull().default("🔥 Скидка в честь открытия"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Public site announcements and news posted by admins */
+export const news = pgTable("site_news", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  tag: text("tag").notNull().default("Обновление"),
+  isPinned: boolean("is_pinned").notNull().default(false),
+  isPublished: boolean("is_published").notNull().default(true),
+  authorName: text("author_name").notNull().default("Администрация"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("site_news_published_idx").on(t.isPublished, t.isPinned, t.createdAt),
+]);
+
+export type DiscountRow = typeof discounts.$inferSelect;
+export type NewsRow = typeof news.$inferSelect;

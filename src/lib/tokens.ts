@@ -11,6 +11,7 @@ import {
   MILLION, TOKEN_BALANCE_CAP, TOKEN_BANK_INITIAL, TOKEN_MIN_PURCHASE,
   TOKEN_PRICE_PER_MILLION_CENTS, TOKEN_PRODUCT_SLUG, tokenCostCents, type TokenSnapshot,
 } from "@/lib/tokens-shared";
+import { getActiveTokenDiscount } from "@/lib/discounts";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -63,12 +64,19 @@ export async function tokenSnapshot(userId: string | null): Promise<TokenSnapsho
   const models = product
     ? await db.select().from(tokenModels).where(eq(tokenModels.productId, product.id)).orderBy(asc(tokenModels.sortOrder))
     : [];
-  const bank = product ? await ensureTokenBank(product.id) : null;
+  const [bank, activeDiscount] = await Promise.all([
+    product ? ensureTokenBank(product.id) : null,
+    getActiveTokenDiscount(),
+  ]);
+  const basePrice = models.find((m) => m.isActive)?.outputPerMillionCents ?? TOKEN_PRICE_PER_MILLION_CENTS;
+  const effectivePrice = (activeDiscount && activeDiscount.isActive) ? activeDiscount.discountPriceCents : basePrice;
+
   const common = {
     models: models.map((m) => ({ slug: m.slug, label: m.label, isActive: m.isActive })),
     cap: TOKEN_BALANCE_CAP,
     bankAvailableTokens: bank?.availableTokens ?? null,
-    pricePerMillionCents: models.find((m) => m.isActive)?.outputPerMillionCents ?? TOKEN_PRICE_PER_MILLION_CENTS,
+    pricePerMillionCents: effectivePrice,
+    discount: activeDiscount && activeDiscount.isActive ? activeDiscount : null,
   };
   if (!userId) return { ...common, apiKey: null, balances: [], balanceCents: 0 };
   const bySlug = new Map(models.map((m) => [m.id, m.slug]));
@@ -143,7 +151,9 @@ export async function purchaseTokens(userId: string, body: Record<string, unknow
     ensure(model?.productId === product.id, "MODEL_NOT_FOUND", 404);
     ensure(model.isActive, "MODEL_DISABLED", 409);
 
-    const rate = model.outputPerMillionCents || TOKEN_PRICE_PER_MILLION_CENTS;
+    const baseRate = model.outputPerMillionCents || TOKEN_PRICE_PER_MILLION_CENTS;
+    const activeDiscount = await getActiveTokenDiscount();
+    const rate = (activeDiscount && activeDiscount.isActive) ? activeDiscount.discountPriceCents : baseRate;
     const cost = Math.ceil((amountTokens * rate) / MILLION);
     ensure(cost === expected, "PRICE_CHANGED", 409);
     ensure(wallet.balanceCents >= cost, "INSUFFICIENT_BALANCE", 409);

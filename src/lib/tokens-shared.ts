@@ -17,6 +17,17 @@ export type TokenModel = {
 };
 /** Legacy balances may have separate input/output credits; both count toward the unified balance. */
 export type TokenBalance = { modelSlug: string; inputTokens: number; outputTokens: number };
+export type TokenDiscount = {
+  id: string;
+  title: string;
+  reason: string;
+  originalPriceCents: number;
+  discountPriceCents: number;
+  percentOff: number;
+  badge: string;
+  isActive: boolean;
+};
+
 export type TokenSnapshot = {
   apiKey: string | null;
   models: TokenModel[];
@@ -26,16 +37,17 @@ export type TokenSnapshot = {
   /** Real shared inventory; null until the API has responded. */
   bankAvailableTokens: number | null;
   pricePerMillionCents: number;
+  discount?: TokenDiscount | null;
 };
 
-/** The same price is recomputed on the server; fractional cents are rounded up. */
-export function tokenCostCents(tokens: number): number {
-  return Math.ceil((tokens * TOKEN_PRICE_PER_MILLION_CENTS) / MILLION);
+/** Recomputed on the server; fractional cents are rounded up. */
+export function tokenCostCents(tokens: number, ratePerMillionCents: number = TOKEN_PRICE_PER_MILLION_CENTS): number {
+  return Math.ceil((tokens * ratePerMillionCents) / MILLION);
 }
 
-/** Exact integer amount affordable at the fixed rate, capped by available inventory. */
-export function affordableTokens(cents: number, cap: number): number {
-  return Math.max(0, Math.min(cap, Math.floor((Math.max(0, cents) * MILLION) / TOKEN_PRICE_PER_MILLION_CENTS)));
+/** Exact integer amount affordable at the rate, capped by available inventory. */
+export function affordableTokens(cents: number, cap: number, ratePerMillionCents: number = TOKEN_PRICE_PER_MILLION_CENTS): number {
+  return Math.max(0, Math.min(cap, Math.floor((Math.max(0, cents) * MILLION) / ratePerMillionCents)));
 }
 
 export function isTokenProduct(product: { kind: string }): boolean {
@@ -46,6 +58,7 @@ export function emptyTokenSnapshot(): TokenSnapshot {
   return {
     apiKey: null, models: [], balances: [], balanceCents: 0, cap: TOKEN_BALANCE_CAP,
     bankAvailableTokens: null, pricePerMillionCents: TOKEN_PRICE_PER_MILLION_CENTS,
+    discount: null,
   };
 }
 

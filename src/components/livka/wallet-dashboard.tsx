@@ -11,6 +11,7 @@ import { TokenCheckout } from "@/components/livka/token-checkout";
 import { useW } from "@/components/livka/i18n-context";
 import { LangSwitch } from "@/components/livka/lang-switch";
 import { AmountInput, AssetSelect, Presets, TopUpModal, WithdrawModal, OperationModal, WalletRulesModal } from "@/components/livka/wallet-actions";
+import { UserNewsModal } from "@/components/livka/news-modal";
 import { WalletModal, WalletErrorBox, Busy, walletRequest, errorMessage, opTitle, opMethod } from "@/components/livka/wallet-primitives";
 import { emptyWallet, money, parseMoney, WALLET_RULES, type WalletOperation, type WalletSnapshot } from "@/lib/wallet-shared";
 import { balanceOf, formatBankTokens, formatTokens, isTokenProduct, type TokenSnapshot } from "@/lib/tokens-shared";
@@ -27,6 +28,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
   const [mobileNav, setMobileNav] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [newsOpen, setNewsOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [afterAuth, setAfterAuth] = useState<string | null>(null);
@@ -117,6 +119,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
         <button className={`wk-nav-item ${section === "purchases" ? "active" : ""}`} onClick={() => navigate("purchases")}><ShoppingBag size={19} /><span>{w.navPurchases}</span></button>
         <button className={`wk-nav-item ${section === "history" ? "active" : ""}`} onClick={() => navigate("history")}><ArrowLeftRight size={19} /><span>{w.navHistory}</span></button>
         <button className="wk-nav-item" onClick={() => { if (user) { setProfileOpen(true); setMobileNav(false); } else askAuth("profile"); }}><Settings2 size={19} /><span>{w.navSettings}</span></button>
+        <button className="wk-nav-item" onClick={() => { setNewsOpen(true); setMobileNav(false); }}><Sparkles size={19} /><span>Новости и акции</span><span className="wk-new" style={{ background: "#f59e0b" }}>АКЦИЯ</span></button>
         {user?.role === "admin" && <a className="wk-nav-item wk-admin-link" href="/admin"><ShieldCheck size={19} /><span>LIVKA CONTROL</span><ArrowUpRight size={14} /></a>}
       </div>
       <div className="wk-sidebar-bottom"><div className="wk-help-card"><span className="wk-help-icon"><Headphones size={21} /></span><h3>{w.helpTitle}</h3><p>{w.helpText}</p><a href="https://t.me/livkamarket" target="_blank" rel="noreferrer">{w.helpBtn} <ArrowUpRight size={15} /></a></div>
@@ -125,7 +128,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
       </div>
     </aside>
 
-    <div className="wk-workspace"><header className="wk-topbar"><div className="wk-breadcrumb"><button className="wk-icon-button wk-mobile-toggle" aria-label={w.openMenu} onClick={() => setMobileNav(true)}><Menu size={21} /></button><span className="wk-breadcrumb-parent">{w.personalArea}</span><ChevronRight size={13} /><strong>{w.sections[section]}</strong></div><div className="wk-topbar-right"><LangSwitch /><a className="wk-top-support" href="https://t.me/livkamarket" target="_blank" rel="noreferrer"><Headphones size={16} />{w.support} <ArrowUpRight size={13} /></a><button className="wk-user-button" onClick={() => user ? setProfileOpen(true) : askAuth("login")}>{user ? <span className="wk-avatar small">{user.name[0].toUpperCase()}</span> : <CircleUserRound size={18} />}<span>{user ? firstName : w.signIn}</span>{user && <ChevronDown size={13} />}</button></div></header>
+    <div className="wk-workspace"><header className="wk-topbar"><div className="wk-breadcrumb"><button className="wk-icon-button wk-mobile-toggle" aria-label={w.openMenu} onClick={() => setMobileNav(true)}><Menu size={21} /></button><span className="wk-breadcrumb-parent">{w.personalArea}</span><ChevronRight size={13} /><strong>{w.sections[section]}</strong></div><div className="wk-topbar-right"><button type="button" className="wk-text-button" onClick={() => setNewsOpen(true)} style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#f59e0b", padding: "6px 12px", background: "rgba(245, 158, 11, 0.1)", borderRadius: "8px", border: "1px solid rgba(245, 158, 11, 0.25)", cursor: "pointer", fontWeight: 700 }}><Sparkles size={14} />Новости</button><LangSwitch /><a className="wk-top-support" href="https://t.me/livkamarket" target="_blank" rel="noreferrer"><Headphones size={16} />{w.support} <ArrowUpRight size={13} /></a><button className="wk-user-button" onClick={() => user ? setProfileOpen(true) : askAuth("login")}>{user ? <span className="wk-avatar small">{user.name[0].toUpperCase()}</span> : <CircleUserRound size={18} />}<span>{user ? firstName : w.signIn}</span>{user && <ChevronDown size={13} />}</button></div></header>
 
       <main className="wk-main"><div className="wk-page-heading"><div><div className="wk-eyebrow"><span />{w.eyebrow}</div><h1>{section === "wallet" ? w.myWallet : w.sections[section]}</h1><p>{w.subtitles[section]}</p></div><button className="wk-button wk-secondary wk-terms-button" onClick={() => setRulesOpen(true)}><ShieldCheck size={16} />{w.terms} <ArrowUpRight size={14} /></button></div>
       {loadError && <div className="wk-loading-error"><WalletErrorBox error={loadError} /><button className="wk-button wk-secondary" onClick={refresh}>{w.retry}</button></div>}
@@ -164,6 +167,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
     {rulesOpen && <WalletRulesModal onClose={() => setRulesOpen(false)} />}
     {buying && <BalanceCheckout product={buying} onClose={() => setBuying(null)} onOpenOrders={() => navigate("purchases")} onTopUp={(missing) => { setPendingProduct(buying); setBuying(null); setQuickAmount(String(Math.min(MAX_TOPUP, Math.max(MIN_TOPUP, Math.ceil(missing / 100))))); setResumeDeposit(null); setTopUp(true); }} onPurchased={() => { void refresh(); setVersion((n) => n + 1); }} />}
     {buyingTokens && <TokenCheckout product={buyingTokens} onClose={() => setBuyingTokens(null)} onOpenOrders={() => navigate("purchases")} onTopUp={(missing) => { setPendingProduct(buyingTokens); setBuyingTokens(null); setQuickAmount(String(Math.min(MAX_TOPUP, Math.max(MIN_TOPUP, Math.ceil(missing / 100))))); setResumeDeposit(null); setTopUp(true); }} onPurchased={() => { void refresh(); setVersion((n) => n + 1); }} />}
+    {newsOpen && <UserNewsModal onClose={() => setNewsOpen(false)} />}
     {toast && <div className="wk-toast" role="status"><CircleCheck size={18} /><span>{toast}</span><button onClick={() => setToast(null)} aria-label={w.closeWindow}><X size={15} /></button></div>}
   </div>;
 }

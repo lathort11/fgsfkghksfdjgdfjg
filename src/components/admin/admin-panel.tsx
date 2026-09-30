@@ -15,11 +15,13 @@ import { LangSwitch } from "@/components/livka/lang-switch";
 import { ProductsPanel } from "@/components/admin/admin-products";
 import { RevenuePanel } from "@/components/admin/admin-revenue";
 import { AdminClaudePanel } from "@/components/admin/admin-claude";
+import { AdminDiscountsPanel } from "@/components/admin/admin-discounts";
+import { AdminNewsPanel } from "@/components/admin/admin-news";
 import type { AdminDict } from "@/lib/admin-i18n";
 
-type Tab = "overview" | "income" | "users" | "products" | "claude" | "audit";
+type Tab = "overview" | "income" | "users" | "products" | "claude" | "discounts" | "news" | "audit";
 type Action = "ban" | "unban" | "credit" | "grant-product";
-const TABS: Tab[] = ["overview", "income", "users", "products", "claude", "audit"];
+const TABS: Tab[] = ["overview", "income", "users", "products", "claude", "discounts", "news", "audit"];
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", ...options });
@@ -128,12 +130,23 @@ function Dashboard({ admin, initialData }: { admin: SafeUser; initialData: Admin
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.assign("/admin"); };
   const recent = data.users.slice(0, 6);
   const go = (next: Tab) => { setTab(next); setMobile(false); };
-  const icons: Record<Tab, React.ReactNode> = { overview: <LayoutDashboard size={18} />, income: <TrendingUp size={18} />, users: <UsersRound size={18} />, products: <Box size={18} />, claude: <KeyRound size={18} />, audit: <Activity size={18} /> };
+  const icons: Record<Tab, React.ReactNode> = {
+    overview: <LayoutDashboard size={18} />,
+    income: <TrendingUp size={18} />,
+    users: <UsersRound size={18} />,
+    products: <Box size={18} />,
+    claude: <KeyRound size={18} />,
+    discounts: <Percent size={18} />,
+    news: <Tag size={18} />,
+    audit: <Activity size={18} />,
+  };
   const badge: Partial<Record<Tab, string>> = {
     overview: data.pendingOperations.length > 0 ? String(data.pendingOperations.length) : undefined,
     users: String(data.stats.users),
     products: `${data.stats.productsActive}/${data.stats.productsTotal}`,
     claude: String(data.claude?.accounts.length ?? 0),
+    discounts: String(data.discounts?.filter((d) => d.isActive).length ?? 0),
+    news: String(data.news?.length ?? 0),
   };
 
   return <div className="ad-app">{mobile && <button className="ad-scrim" aria-label={a.closeMenu} onClick={() => setMobile(false)} />}
@@ -146,6 +159,8 @@ function Dashboard({ admin, initialData }: { admin: SafeUser; initialData: Admin
       {tab === "users" && <UsersTable data={data} loading={loading} onAction={open} onPage={(page) => load(data.query, page)} />}
       {tab === "products" && <ProductsPanel products={data.products} tokenModels={data.tokenModels} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
       {tab === "claude" && data.claude && <AdminClaudePanel claude={data.claude} usersList={data.users.map((u) => ({ id: u.id, customerId: u.customerId, name: u.name, email: u.email }))} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
+      {tab === "discounts" && <AdminDiscountsPanel discounts={data.discounts ?? []} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
+      {tab === "news" && <AdminNewsPanel news={data.news ?? []} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
       {tab === "audit" && <Audit data={data} />}
       <footer><span>© 2026 LIVKAMARKET CONTROL</span><span><ShieldCheck size={13} />{a.footerRight}</span></footer></main>
     </div>

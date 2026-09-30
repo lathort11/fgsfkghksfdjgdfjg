@@ -5,7 +5,7 @@ import { db } from "@/db";
 import {
   adminAudit, inventory, orders, products, sessions, tokenAccounts, tokenBalances,
   tokenBank, tokenModels, tokenPurchases, tokenUsage, users, wallets,
-  walletEntries, walletOperations,
+  walletEntries, walletOperations, type DiscountRow, type NewsRow,
 } from "@/db/schema";
 import { adminEnsure } from "@/lib/admin-auth";
 import { formatCustomerId, type SafeUser } from "@/lib/session";
@@ -15,6 +15,8 @@ import { productTitle } from "@/lib/order-delivery";
 import { seedProducts } from "@/lib/livka";
 import { seedTokenModels } from "@/lib/tokens";
 import { deleteInvoice } from "@/lib/crypto-pay";
+import { listAllDiscounts } from "@/lib/discounts";
+import { listAllNews } from "@/lib/news";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const PAGE_SIZE = 20;
@@ -136,6 +138,8 @@ export type AdminDashboardData = {
   products: AdminProduct[];
   pendingOperations: AdminPendingOperation[];
   audit: { id: string; action: string; actor: string; actorCustomerId: string; target: string | null; targetCustomerId: string | null; details: Record<string, unknown>; createdAt: string }[];
+  discounts: DiscountRow[];
+  news: NewsRow[];
 };
 
 export async function getAdminDashboard(query = "", requestedPage = 1): Promise<AdminDashboardData> {
@@ -197,7 +201,11 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
       .where(inArray(walletOperations.status, ["pending", "processing"]))
       .orderBy(desc(walletOperations.createdAt))
       .limit(30),
+    listAllDiscounts(),
+    listAllNews(),
   ]);
+  const discountsList = (countRows as unknown as [unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, DiscountRow[], NewsRow[]])[10] ?? [];
+  const newsList = (countRows as unknown as [unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, DiscountRow[], NewsRow[]])[11] ?? [];
   const tokenRows = await db.select().from(tokenModels).orderBy(tokenModels.sortOrder);
 
   const ids = [...new Set(auditRows.flatMap((row) => [row.actorUserId, row.targetUserId].filter(Boolean) as string[]))];
@@ -244,6 +252,8 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
       const a = nameMap.get(row.actorUserId); const t = row.targetUserId ? nameMap.get(row.targetUserId) : null;
       return { id: row.id, action: row.action, actor: a?.name ?? "—", actorCustomerId: a ? formatCustomerId(a.customerNo) : "—", target: t?.name ?? null, targetCustomerId: t ? formatCustomerId(t.customerNo) : null, details: row.details, createdAt: row.createdAt.toISOString() };
     }),
+    discounts: discountsList,
+    news: newsList,
   };
 }
 

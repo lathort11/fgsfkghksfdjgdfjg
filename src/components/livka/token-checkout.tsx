@@ -57,11 +57,11 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
   const personalAvailable = Math.max(0, data.cap - (owned?.inputTokens ?? 0) - (owned?.outputTokens ?? 0));
   const bankAvailable = data.bankAvailableTokens ?? 0;
   const stockAvailable = Math.min(personalAvailable, bankAvailable);
-  const affordable = affordableTokens(data.balanceCents, stockAvailable);
+  const affordable = affordableTokens(data.balanceCents, stockAvailable, data.pricePerMillionCents);
   const maxTokens = Math.min(stockAvailable, affordable);
   const canChoose = !!model?.isActive && stockAvailable >= TOKEN_MIN_PURCHASE && maxTokens >= TOKEN_MIN_PURCHASE;
   const validInput = text === null || (parseTokens(text) >= TOKEN_MIN_PURCHASE && parseTokens(text) <= maxTokens);
-  const cost = tokenCostCents(amountTokens);
+  const cost = tokenCostCents(amountTokens, data.pricePerMillionCents);
   const missing = Math.max(0, cost - data.balanceCents);
   const remaining = formatBankTokens(data.bankAvailableTokens, locale);
 
@@ -161,7 +161,49 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
           </button>)}
         </div>
 
-        <div className="wk-token-flat-rate"><Sparkles size={17} /><span>{copy.priceLine(money(data.pricePerMillionCents, true))}</span></div>
+        {data.discount?.isActive ? (
+          <div className="wk-token-promo-banner" style={{
+            background: "linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(245, 158, 11, 0.12))",
+            border: "1px solid rgba(245, 158, 11, 0.35)",
+            borderRadius: "14px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontWeight: 700, fontSize: "13px", color: "#f59e0b", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sparkles size={15} />
+                {data.discount.badge || "🔥 Скидка в честь открытия"}
+              </span>
+              <span style={{
+                background: "#ef4444",
+                color: "#fff",
+                fontWeight: 800,
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "20px",
+              }}>
+                -{data.discount.percentOff}%
+              </span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+              <span style={{ textDecoration: "line-through", color: "var(--wk-muted, #94a3b8)", fontSize: "14px" }}>
+                {money(data.discount.originalPriceCents, true)}
+              </span>
+              <span style={{ color: "var(--wk-muted, #94a3b8)", fontSize: "13px" }}>→</span>
+              <span style={{ fontSize: "18px", fontWeight: 800, color: "#10b981" }}>
+                {money(data.pricePerMillionCents, true)}
+              </span>
+              <span style={{ fontSize: "12px", color: "var(--wk-muted, #94a3b8)" }}>
+                / 1M токенов ({data.discount.reason})
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="wk-token-flat-rate"><Sparkles size={17} /><span>{copy.priceLine(money(data.pricePerMillionCents, true))}</span></div>
+        )}
         <TokenField
           value={amountTokens}
           raw={text}
