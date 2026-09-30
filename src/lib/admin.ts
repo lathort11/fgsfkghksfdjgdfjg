@@ -14,6 +14,7 @@ import { validId } from "@/lib/wallet-security";
 import { productTitle } from "@/lib/order-delivery";
 import { seedProducts } from "@/lib/livka";
 import { seedTokenModels } from "@/lib/tokens";
+import { deleteInvoice } from "@/lib/crypto-pay";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 const PAGE_SIZE = 20;
@@ -106,6 +107,22 @@ export type AdminClaudeData = {
   recentUsage: AdminClaudeUsageRow[];
 };
 
+export type AdminPendingOperation = {
+  id: string;
+  kind: string;
+  status: string;
+  amountCents: number;
+  feeCents: number;
+  description: string;
+  method: string;
+  reference: string | null;
+  createdAt: string;
+  userId: string;
+  userName: string | null;
+  userEmail: string | null;
+  customerId: string;
+};
+
 export type AdminDashboardData = {
   revenue: AdminRevenue;
   tokenModels: AdminTokenModel[];
@@ -117,6 +134,7 @@ export type AdminDashboardData = {
   pages: number;
   query: string;
   products: AdminProduct[];
+  pendingOperations: AdminPendingOperation[];
   audit: { id: string; action: string; actor: string; actorCustomerId: string; target: string | null; targetCustomerId: string | null; details: Record<string, unknown>; createdAt: string }[];
 };
 
@@ -137,7 +155,7 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
     spent: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`.as("spent"),
   }).from(orders).groupBy(orders.userId).as("order_agg");
 
-  const [countRows, userRows, userStats, balanceStats, orderStats, productRows, auditRows, revenue, claude] = await Promise.all([
+  const [countRows, userRows, userStats, balanceStats, orderStats, productRows, auditRows, revenue, claude, pendingOps] = await Promise.all([
     db.select({ count: sql<number>`count(*)::int` }).from(users).where(filter),
     db.select({
       id: users.id, customerNo: users.customerNo, name: users.name, email: users.email,
@@ -158,6 +176,27 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
     db.select().from(adminAudit).orderBy(desc(adminAudit.createdAt)).limit(30),
     getAdminRevenue(),
     getAdminClaudeData(),
+    db.select({
+      id: walletOperations.id,
+      kind: walletOperations.kind,
+      status: walletOperations.status,
+      amountCents: walletOperations.amountCents,
+      feeCents: walletOperations.feeCents,
+      description: walletOperations.description,
+      method: walletOperations.method,
+      reference: walletOperations.reference,
+      createdAt: walletOperations.createdAt,
+      userId: wallets.userId,
+      userName: users.name,
+      userEmail: users.email,
+      customerNo: users.customerNo,
+    })
+      .from(walletOperations)
+      .innerJoin(wallets, eq(walletOperations.walletId, wallets.id))
+      .leftJoin(users, eq(wallets.userId, users.id))
+      .where(inArray(walletOperations.status, ["pending", "processing"]))
+      .orderBy(desc(walletOperations.createdAt))
+      .limit(30),
   ]);
   const tokenRows = await db.select().from(tokenModels).orderBy(tokenModels.sortOrder);
 
@@ -185,6 +224,21 @@ export async function getAdminDashboard(query = "", requestedPage = 1): Promise<
     products: productRows.map((p) => ({
       id: p.id, slug: p.slug, title: productTitle(p.slug), stock: p.stock, active: p.isActive, priceCents: p.priceCents,
       per: p.per, accent: p.accent, icon: p.icon, kind: p.kind, soldCount: p.soldCount,
+    })),
+    pendingOperations: pendingOps.map((op) => ({
+      id: op.id,
+      kind: op.kind,
+      status: op.status,
+      amountCents: op.amountCents,
+      feeCents: op.feeCents,
+      description: op.description,
+      method: op.method,
+      reference: op.reference,
+      createdAt: op.createdAt.toISOString(),
+      userId: op.userId,
+      userName: op.userName,
+      userEmail: op.userEmail,
+      customerId: op.customerNo ? formatCustomerId(op.customerNo) : "—",
     })),
     audit: auditRows.map((row) => {
       const a = nameMap.get(row.actorUserId); const t = row.targetUserId ? nameMap.get(row.targetUserId) : null;
@@ -498,8 +552,10 @@ export async function getAdminClaudeData(): Promise<AdminClaudeData> {
 
 export async function adminIssueTokenKey(
   actor: SafeUser,
+  params: { userId: string; initialTokens?: number; label?: string; note?: string }
   params: { userId: string; initialTokens?: number; label?: string; note?: string; balanceMode?: "replace" | "add" }
 ) {
+  const { userId, initialTokens = 0, label, note } = params;
   const { userId, initialTokens = 0, label, note, balanceMode = "replace" } = params;
   adminEnsure(validId(userId), "INVALID_USER");
   return db.transaction(async (tx) => {
@@ -530,6 +586,7 @@ export async function adminIssueTokenKey(
       accountId = created.id;
     }
 
+    if (initialTokens > 0) {
     if (initialTokens >= 0 && balanceMode === "replace") {
       await tx.insert(tokenBalances).values({
         userId: target.id,
@@ -574,6 +631,7 @@ export async function adminIssueTokenKey(
       actorUserId: actor.id,
       targetUserId: target.id,
       action: "claude.key_issued",
+      details: { accountId, initialTokens, label, ...(note ? { note } : {}) },
       details: { accountId, initialTokens, balanceMode, label, ...(note ? { note } : {}) },
     });
 
@@ -676,6 +734,7 @@ export async function adminToggleTokenAccount(actor: SafeUser, accountId: string
   });
 }
 
+export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string) {
 export async function adminDeleteTokenAccount(actor: SafeUser, accountId: string, note?: string, resetBalance?: boolean) {
   adminEnsure(validId(accountId), "INVALID_ACCOUNT");
   return db.transaction(async (tx) => {
@@ -745,5 +804,62 @@ export async function adminReplenishTokenBank(actor: SafeUser, addTokens: number
     });
 
     return { ok: true, availableTokens: nextAvailable };
+  });
+}
+
+export async function adminRejectOperation(
+  actor: SafeUser,
+  operationIdValue: unknown,
+  reasonValue?: unknown
+) {
+  const operationId = String(operationIdValue || "");
+  adminEnsure(validId(operationId), "INVALID_OPERATION_ID");
+  const reason = typeof reasonValue === "string" ? reasonValue.trim().slice(0, 500) : "admin_rejected";
+
+  return db.transaction(async (tx) => {
+    const [op] = await tx.select().from(walletOperations).where(eq(walletOperations.id, operationId)).for("update");
+    adminEnsure(op, "OPERATION_NOT_FOUND", 404);
+    if (op.status === "rejected") {
+      return { ok: true, operation: op };
+    }
+    adminEnsure(["pending", "processing"].includes(op.status), "CANNOT_REJECT_COMPLETED_OPERATION", 409);
+
+    const [w] = await tx.select().from(wallets).where(eq(wallets.id, op.walletId)).for("update");
+    adminEnsure(w, "WALLET_NOT_FOUND", 404);
+
+    if (op.kind === "withdrawal") {
+      // Reversal: release held funds back to balance
+      await tx.insert(walletEntries).values({
+        walletId: w.id,
+        operationId: op.id,
+        type: "withdrawal_reversal",
+        amountCents: op.amountCents,
+        heldDeltaCents: -op.amountCents,
+      });
+      await tx.update(wallets).set({
+        balanceCents: sql`${wallets.balanceCents} + ${op.amountCents}`,
+        heldCents: sql`${wallets.heldCents} - ${op.amountCents}`,
+        updatedAt: new Date(),
+      }).where(eq(wallets.id, w.id));
+    } else if (op.kind === "deposit") {
+      if (op.externalId) {
+        void deleteInvoice(op.externalId).catch(() => {});
+      }
+    }
+
+    const [updated] = await tx.update(walletOperations).set({
+      status: "rejected",
+      reference: op.reference ? `${op.reference} | Отклонено: ${reason}` : `Отклонено: ${reason}`,
+      completedAt: new Date(),
+    }).where(eq(walletOperations.id, op.id)).returning();
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      targetUserId: w.userId,
+      action: "wallet.operation_rejected",
+      details: { operationId: op.id, kind: op.kind, amountCents: op.amountCents, reason },
+    });
+
+    return { ok: true, operation: updated };
   });
 }

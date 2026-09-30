@@ -239,10 +239,23 @@ export function TonMark(p: P) {
   );
 }
 
+export function CryptoBotMark(p: P) {
+  return (
+    <svg viewBox="0 0 32 32" {...p}>
+      <circle cx="16" cy="16" r="16" fill="#24A1DE" />
+      <path
+        fill="#fff"
+        d="M23.1 8.9 6.4 15.3c-.7.26-.67 1.17.04 1.39l3.96 1.25 1.47 4.69c.21.66 1.03.82 1.47.28l2.07-2.4 3.73 2.74c.65.47 1.54.11 1.68-.68l2.67-12.8c.16-.82-.26-1.22-.78-.88Zm-11.8 8.55 8.11-5.08c.26-.17.55.12.35.35l-6.6 6.21-.27 2.69z"
+      />
+    </svg>
+  );
+}
+
 export function CryptoBadge({ asset, ...rest }: P & { asset: string }) {
+  if (asset === "Crypto Bot" || asset === "crypto_bot" || asset === "Crypto Pay") return <CryptoBotMark {...rest} />;
   if (asset === "USDT") return <UsdtMark {...rest} />;
   if (asset === "BTC") return <BtcMark {...rest} />;
   if (asset === "ETH") return <EthMark {...rest} />;
   if (asset === "TON") return <TonMark {...rest} />;
-  return <LivkaMark {...rest} />;
+  return <CryptoBotMark {...rest} />;
 }

@@ -279,6 +279,14 @@
 .wk-invoice-icon { display:flex; align-items:center; justify-content:center; width:62px; height:62px; border-radius:18px; background:#392349; border:1px solid #70518455; color:#c8a3e7; margin:0 auto 0; }
 .wk-invoice-amount { text-align:center; font-size:30px; font-weight:550; color:#dfc8ee; margin-bottom:4px; }
 .wk-invoice-amount small { display:block; color:#80648f; font-size:11px; font-weight:400; margin-top:3px; }
+.wk-timer-box { display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:11px; background:linear-gradient(135deg,#291838,#161021); border:1px solid #5d3d75; color:#dec2ee; margin:4px 0 6px; }
+.wk-timer-box svg { color:#bb91e3; flex-shrink:0; }
+.wk-timer-content { display:flex; align-items:center; justify-content:space-between; width:100%; font-size:11px; }
+.wk-timer-content b { font-size:18px; letter-spacing:1px; color:#f0ddff; }
+.wk-timer-box.urgent { background:linear-gradient(135deg,#38151f,#220d14); border-color:#8b3449; color:#f7aab9; }
+.wk-timer-box.urgent svg { color:#ff6885; }
+.wk-timer-box.urgent b { color:#ff88a0; }
+.wk-spin-slow { animation:wk-spin 4s linear infinite; }
 .wk-withdrawable { padding:12px 15px; background:#21192a; border:1px solid #443150; border-radius:9px; display:flex; justify-content:space-between; color:#ac8ebf; font-size:11px; align-items:center; margin-bottom:1px; }
 .wk-withdrawable b { font-size:19px; color:#d6bce6; font-weight:550; }
 .wk-label { display:flex; align-items:center; justify-content:space-between; color:#b39ac2; font-size:11px; margin-bottom:-5px; }

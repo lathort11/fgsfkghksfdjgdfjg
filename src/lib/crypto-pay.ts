@@ -29,12 +29,33 @@ async function call<T>(method: string, body: Record<string, unknown>): Promise<T
   return data.result;
 }
 
-export function createInvoice(id: string, amountCents: number, asset: string) {
-  return call<CryptoInvoice>("createInvoice", {
-    currency_type: "fiat", fiat: "USD", amount: (amountCents / 100).toFixed(2),
-    accepted_assets: asset, description: "LIVKAMARKET balance top-up",
-    payload: id, allow_comments: false, allow_anonymous: false, expires_in: 3600,
-  });
+export function createInvoice(id: string, amountCents: number, asset?: string) {
+  const body: Record<string, unknown> = {
+    currency_type: "fiat",
+    fiat: "USD",
+    amount: (amountCents / 100).toFixed(2),
+    description: "LIVKAMARKET balance top-up",
+    payload: id,
+    allow_comments: false,
+    allow_anonymous: false,
+    expires_in: 600, // 10 minutes limit
+  };
+  if (asset && asset !== "Crypto Bot" && asset !== "crypto_bot" && asset !== "Crypto Pay") {
+    body.accepted_assets = asset;
+  } else {
+    body.accepted_assets = "USDT,TON,BTC,ETH,LTC,BNB,TRX,USDC";
+  }
+  return call<CryptoInvoice>("createInvoice", body);
+}
+
+export async function deleteInvoice(id: number | string): Promise<boolean> {
+  try {
+    const invoiceId = Number(id);
+    if (!Number.isSafeInteger(invoiceId)) return false;
+    return await call<boolean>("deleteInvoice", { invoice_id: invoiceId });
+  } catch {
+    return false;
+  }
 }
 
 export async function getInvoice(id: string): Promise<CryptoInvoice> {

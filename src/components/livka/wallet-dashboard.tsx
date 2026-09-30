@@ -31,7 +31,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
   const [profileOpen, setProfileOpen] = useState(false);
   const [afterAuth, setAfterAuth] = useState<string | null>(null);
   const [quickAmount, setQuickAmount] = useState("50");
-  const [asset, setAsset] = useState("USDT");
+  const [asset, setAsset] = useState("Crypto Bot");
   const [topUp, setTopUp] = useState(false);
   const [resumeDeposit, setResumeDeposit] = useState<WalletOperation | null>(null);
   const [withdraw, setWithdraw] = useState(false);

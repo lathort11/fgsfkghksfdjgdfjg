@@ -19,10 +19,35 @@ export function Presets({ value, onChange }: { value: string; onChange: (s: stri
 }
 export function AssetSelect({ value, onChange, id = "deposit-asset" }: { value: string; onChange: (s: string) => void; id?: string }) {
   const { w } = useW();
-  return <div className="wk-asset-field"><label htmlFor={id}>{w.methodLabel}</label><div className="wk-asset-select"><CryptoBadge asset={value} className="w-8 h-8" /><select id={id} value={value} onChange={(e) => onChange(e.target.value)}>{["USDT", "TON", "BTC", "ETH"].map((coin) => <option key={coin} value={coin}>{coin} · Crypto Pay</option>)}</select><span className="wk-select-tag">CRYPTO</span></div></div>;
+  return (
+    <div className="wk-asset-field">
+      <label htmlFor={id}>{w.methodLabel}</label>
+      <div className="wk-asset-select">
+        <CryptoBadge asset="Crypto Bot" className="w-8 h-8" />
+        <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+          <option value="Crypto Bot">{w.cryptoBotMethod ?? "Crypto Bot · Telegram"}</option>
+        </select>
+        <span className="wk-select-tag">{w.cryptoBotTag ?? "TELEGRAM BOT"}</span>
+      </div>
+    </div>
+  );
 }
 
-export function TopUpModal({ wallet, initialAmount = "50", initialAsset = "USDT", existing, onClose, onUpdate }: { wallet: WalletSnapshot; initialAmount?: string; initialAsset?: string; existing?: WalletOperation | null; onClose: () => void; onUpdate: (w: WalletSnapshot, done?: boolean) => void }) {
+export function TopUpModal({
+  wallet,
+  initialAmount = "50",
+  initialAsset = "Crypto Bot",
+  existing,
+  onClose,
+  onUpdate,
+}: {
+  wallet: WalletSnapshot;
+  initialAmount?: string;
+  initialAsset?: string;
+  existing?: WalletOperation | null;
+  onClose: () => void;
+  onUpdate: (w: WalletSnapshot, done?: boolean) => void;
+}) {
   const { w } = useW();
   const [value, setValue] = useState(initialAmount);
   const [asset, setAsset] = useState(initialAsset);
@@ -31,51 +56,212 @@ export function TopUpModal({ wallet, initialAmount = "50", initialAsset = "USDT"
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [generation, setGeneration] = useState(0);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const key = useRequestKey();
   const cents = parseMoney(value);
   const complete = invoice?.status === "completed";
+  const rejected = invoice?.status === "rejected" || invoice?.status === "cancelled" || invoice?.status === "expired";
+
+  const getSecondsLeft = (createdStr?: string) => {
+    if (!createdStr) return 600;
+    const elapsed = Math.floor((Date.now() - new Date(createdStr).getTime()) / 1000);
+    return Math.max(0, 600 - elapsed);
+  };
+  const [secondsLeft, setSecondsLeft] = useState(() => (invoice ? getSecondsLeft(invoice.createdAt) : 600));
+
   const create = async () => {
-    setError(null); setBusy(true);
+    setError(null);
+    setBusy(true);
+    setConfirmCancel(false);
     try {
       const input = { amountCents: cents, asset };
       const result = await walletRequest<ActionResult>("/api/wallet", { action: "deposit", ...input, idempotencyKey: key({ ...input, generation }) });
-      setInvoice(result.operation); onUpdate(result.wallet);
-    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+      setInvoice(result.operation);
+      setSecondsLeft(600);
+      onUpdate(result.wallet);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
+
   const confirm = async () => {
     if (!invoice) return;
-    setBusy(true); setError(null); setWaiting(false);
+    setBusy(true);
+    setError(null);
+    setWaiting(false);
     try {
       const result = await walletRequest<ActionResult>("/api/wallet", { action: "confirm-deposit", operationId: invoice.id });
-      setInvoice(result.operation); onUpdate(result.wallet);
+      setInvoice(result.operation);
+      onUpdate(result.wallet);
       setWaiting(result.operation.status === "pending");
-    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const cancel = async () => {
+    if (!invoice) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await walletRequest<ActionResult>("/api/wallet", { action: "cancel", operationId: invoice.id });
+      setInvoice(result.operation);
+      onUpdate(result.wallet);
+      setConfirmCancel(false);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 10-minute timer countdown
+  useEffect(() => {
+    if (!invoice || invoice.status !== "pending") return;
+    setSecondsLeft(getSecondsLeft(invoice.createdAt));
+
+    const countdown = setInterval(() => {
+      const remaining = getSecondsLeft(invoice.createdAt);
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        clearInterval(countdown);
+        // Automatically expire invoice as rejected
+        walletRequest<ActionResult>("/api/wallet", { action: "cancel", operationId: invoice.id })
+          .then((res) => {
+            setInvoice(res.operation);
+            onUpdate(res.wallet);
+          })
+          .catch(() => {
+            setInvoice((prev) => (prev ? { ...prev, status: "rejected" } : null));
+          });
+      }
+    }, 1000);
+
+    return () => clearInterval(countdown);
+  }, [invoice?.id, invoice?.status, invoice?.createdAt, onUpdate]);
+
+  // Periodic status poll
   useEffect(() => {
     if (!invoice || invoice.status !== "pending") return;
     const timer = setInterval(() => {
-      walletRequest<ActionResult>("/api/wallet", { action: "confirm-deposit", operationId: invoice.id }).then((result) => { setInvoice(result.operation); onUpdate(result.wallet); }).catch(() => {});
+      walletRequest<ActionResult>("/api/wallet", { action: "confirm-deposit", operationId: invoice.id })
+        .then((result) => {
+          setInvoice(result.operation);
+          onUpdate(result.wallet);
+        })
+        .catch(() => {});
     }, 15000);
     return () => clearInterval(timer);
   }, [invoice?.id, invoice?.status, onUpdate]);
-  return <WalletModal title={complete ? w.topUpDoneTitle : w.topUpTitle} subtitle={complete ? w.topUpDoneSub : w.topUpSub} onClose={onClose}>
-    {complete ? <div className="wk-success"><div className="wk-success-icon"><CheckCheck size={30} /></div><div className="wk-success-amount">+{money(invoice.amountCents)}</div><p>{w.fundsArrived}<br />{w.fundsNext}</p><button className="wk-button wk-primary wk-full" onClick={() => onUpdate(wallet, true)}>{w.goShopping} <ArrowRight size={17} /></button></div> : !invoice ? <form onSubmit={(e) => { e.preventDefault(); void create(); }} className="wk-form">
-      <AmountInput value={value} onChange={setValue} id="modal-deposit-amount" /><Presets value={value} onChange={setValue} />
-      <p className="wk-field-hint">{w.rangeHint(money(rules.minDepositCents), money(rules.maxDepositCents))}</p>
-      <AssetSelect value={asset} onChange={setAsset} id="modal-deposit-asset" />
-      <div className="wk-summary"><SummaryRow label={w.serviceFee}>{money(0)}</SummaryRow><SummaryRow label={w.willCredit} strong>{money(cents)}</SummaryRow></div>
-      <WalletErrorBox error={error} /><button type="submit" className="wk-button wk-primary wk-full" disabled={busy || cents < rules.minDepositCents || cents > rules.maxDepositCents}>{busy ? <Busy /> : <>{w.continue} <ArrowRight size={17} /></>}</button>
-      <p className="wk-caption"><ShieldCheck size={13} /> {w.secured}</p>
-    </form> : <div className="wk-form">
-      <div className="wk-invoice-icon"><Wallet size={30} /></div><div className="wk-invoice-amount">{money(invoice.amountCents)} <small>{w.toCredit}</small></div>
-      <div className="wk-summary"><SummaryRow label={w.methodRow}>{invoice.method}</SummaryRow><SummaryRow label={w.statusRow}><span className={`wk-status ${invoice.status}`}>{w.status[invoice.status]}</span></SummaryRow><SummaryRow label={w.serviceFee}>{money(0)}</SummaryRow></div>
-      <p className="wk-muted">{w.payInvoiceHint}</p>
-      {invoice.paymentUrl && invoice.status === "pending" && <a className="wk-button wk-primary wk-full" href={invoice.paymentUrl} target="_blank" rel="noopener noreferrer">{w.goPay} <ExternalLink size={16} /></a>}
-      <WalletErrorBox error={error} />
-      {waiting && <div className="wk-info"><Clock3 size={17} /> {w.waitingCheck}</div>}
-      {invoice.status === "pending" ? <button className="wk-button wk-secondary wk-full" disabled={busy} onClick={confirm}>{busy ? <Busy text={w.checking} /> : w.checkPayment}</button> : <button className="wk-button wk-secondary wk-full" onClick={() => { setInvoice(null); setError(null); setGeneration((n) => n + 1); }}>{w.newTopUp}</button>}
-    </div>}
-  </WalletModal>;
+
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
+  const ss = String(secondsLeft % 60).padStart(2, "0");
+
+  return (
+    <WalletModal title={complete ? w.topUpDoneTitle : w.topUpTitle} subtitle={complete ? w.topUpDoneSub : w.topUpSub} onClose={onClose}>
+      {complete ? (
+        <div className="wk-success">
+          <div className="wk-success-icon"><CheckCheck size={30} /></div>
+          <div className="wk-success-amount">+{money(invoice.amountCents)}</div>
+          <p>{w.fundsArrived}<br />{w.fundsNext}</p>
+          <button className="wk-button wk-primary wk-full" onClick={() => onUpdate(wallet, true)}>
+            {w.goShopping} <ArrowRight size={17} />
+          </button>
+        </div>
+      ) : !invoice ? (
+        <form onSubmit={(e) => { e.preventDefault(); void create(); }} className="wk-form">
+          <AmountInput value={value} onChange={setValue} id="modal-deposit-amount" />
+          <Presets value={value} onChange={setValue} />
+          <p className="wk-field-hint">{w.rangeHint(money(rules.minDepositCents), money(rules.maxDepositCents))}</p>
+          <AssetSelect value={asset} onChange={setAsset} id="modal-deposit-asset" />
+          <div className="wk-summary">
+            <SummaryRow label={w.serviceFee}>{money(0)}</SummaryRow>
+            <SummaryRow label={w.willCredit} strong>{money(cents)}</SummaryRow>
+          </div>
+          <WalletErrorBox error={error} />
+          <button type="submit" className="wk-button wk-primary wk-full" disabled={busy || cents < rules.minDepositCents || cents > rules.maxDepositCents}>
+            {busy ? <Busy /> : <>{w.continue} <ArrowRight size={17} /></>}
+          </button>
+          <p className="wk-caption"><ShieldCheck size={13} /> {w.secured}</p>
+        </form>
+      ) : (
+        <div className="wk-form">
+          <div className="wk-invoice-icon"><Wallet size={30} /></div>
+          <div className="wk-invoice-amount">{money(invoice.amountCents)} <small>{w.toCredit}</small></div>
+          <div className="wk-summary">
+            <SummaryRow label={w.methodRow}>{invoice.method}</SummaryRow>
+            <SummaryRow label={w.statusRow}>
+              <span className={`wk-status ${invoice.status}`}>{w.status[invoice.status]}</span>
+            </SummaryRow>
+            <SummaryRow label={w.serviceFee}>{money(0)}</SummaryRow>
+          </div>
+
+          {invoice.status === "pending" && secondsLeft > 0 && (
+            <div className={`wk-timer-box ${secondsLeft < 120 ? "urgent" : ""}`}>
+              <Clock3 size={18} />
+              <div className="wk-timer-content">
+                <span>{w.payInvoiceTimer}</span>
+                <b className="wk-mono">{mm}:{ss}</b>
+              </div>
+            </div>
+          )}
+
+          {rejected && (
+            <div className="wk-error">
+              <X size={17} />
+              <span>{w.invoiceExpiredNotice}</span>
+            </div>
+          )}
+
+          {invoice.status === "pending" && secondsLeft > 0 ? (
+            <>
+              <p className="wk-muted">{w.payInvoiceHint}</p>
+              {invoice.paymentUrl && (
+                <a className="wk-button wk-primary wk-full" href={invoice.paymentUrl} target="_blank" rel="noopener noreferrer">
+                  {w.goPay} <ExternalLink size={16} />
+                </a>
+              )}
+              <WalletErrorBox error={error} />
+              {waiting && <div className="wk-info"><Clock3 size={17} /> {w.waitingCheck}</div>}
+              <div className="wk-two-buttons">
+                <button className="wk-button wk-secondary" disabled={busy} onClick={confirm}>
+                  {busy ? <Busy text={w.checking} /> : w.checkPayment}
+                </button>
+                <button className="wk-button wk-danger" disabled={busy} onClick={() => setConfirmCancel(true)}>
+                  {w.rejectInvoice}
+                </button>
+              </div>
+              {confirmCancel && (
+                <div className="wk-cancel-block">
+                  <p>{w.rejectInvoiceConfirm}</p>
+                  <div className="wk-two-buttons">
+                    <button className="wk-button wk-secondary" onClick={() => setConfirmCancel(false)}>{w.keep}</button>
+                    <button className="wk-button wk-danger" disabled={busy} onClick={cancel}>{busy ? <Busy /> : w.decline}</button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <button
+              className="wk-button wk-secondary wk-full"
+              onClick={() => {
+                setInvoice(null);
+                setError(null);
+                setConfirmCancel(false);
+                setGeneration((n) => n + 1);
+              }}
+            >
+              {w.newTopUp}
+            </button>
+          )}
+        </div>
+      )}
+    </WalletModal>
+  );
 }
 
 export function WithdrawModal({ wallet, onClose, onUpdate }: { wallet: WalletSnapshot; onClose: () => void; onUpdate: (w: WalletSnapshot) => void }) {
@@ -133,7 +319,26 @@ export function OperationModal({ operation, onClose, onUpdate, onPay, onOrders }
     <button className="wk-copy-id" onClick={async () => { try { await navigator.clipboard.writeText(op.id); setCopied(true); } catch { setError("COPY_FAILED"); } }}><span>{w.operationWord} <code>{op.id}</code></span>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
     {op.reference && <p className="wk-muted wk-break">{w.reviewResult} {op.reference}</p>}
     <WalletErrorBox error={error} />
-    {op.kind === "deposit" && op.status === "pending" && <button className="wk-button wk-primary wk-full" onClick={() => onPay(op)}>{w.continueTopUp} <ArrowRight size={16} /></button>}
+    {op.kind === "deposit" && op.status === "pending" && (
+      <div className="wk-cancel-block">
+        <button className="wk-button wk-primary wk-full" style={{ marginBottom: 10 }} onClick={() => onPay(op)}>
+          {w.continueTopUp} <ArrowRight size={16} />
+        </button>
+        {confirmCancel ? (
+          <>
+            <p>{w.rejectInvoiceConfirm}</p>
+            <div className="wk-two-buttons">
+              <button className="wk-button wk-secondary" onClick={() => setConfirmCancel(false)}>{w.keep}</button>
+              <button className="wk-button wk-danger" disabled={busy} onClick={cancel}>{busy ? <Busy /> : w.decline}</button>
+            </div>
+          </>
+        ) : (
+          <button className="wk-button wk-danger wk-full" onClick={() => setConfirmCancel(true)}>
+            <X size={16} /> {w.rejectInvoice}
+          </button>
+        )}
+      </div>
+    )}
     {op.kind === "purchase" && <button className="wk-button wk-primary wk-full" onClick={onOrders}>{w.openPurchases} <ArrowRight size={16} /></button>}
     {op.status === "pending" && op.kind === "withdrawal" && <div className="wk-cancel-block">{confirmCancel ? <><p>{w.cancelQ}</p><div className="wk-two-buttons"><button className="wk-button wk-secondary" onClick={() => setConfirmCancel(false)}>{w.keep}</button><button className="wk-button wk-danger" disabled={busy} onClick={cancel}>{busy ? <Busy /> : w.yesCancel}</button></div></> : <button className="wk-button wk-secondary wk-full" onClick={() => setConfirmCancel(true)}><X size={16} /> {w.cancelRequest}</button>}</div>}
   </WalletModal>;

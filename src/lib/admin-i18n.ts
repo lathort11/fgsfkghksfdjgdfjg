@@ -27,6 +27,7 @@ const ru = {
     "claude.balance_updated": "Баланс токенов изменен",
     "claude.model_updated": "Тариф модели обновлен",
     "claude.bank_replenished": "Пул токенов банка пополнен",
+    "wallet.operation_rejected": "Операция отклонена",
   } as Record<string, string>,
   errors: {
     AUTH: "Сессия истекла. Войдите снова.", FORBIDDEN: "Недостаточно прав.", REASON_REQUIRED: "Укажите причину минимум из 5 символов.",
@@ -69,6 +70,14 @@ const ru = {
     { t: "Подтвердите результат", p: "Балансовые изменения проходят через отдельную проводку." },
   ],
   noUsers: "Пользователей пока нет.", sActive: "Активен", sBanned: "Заблокирован", creditTitle: "Начислить баланс",
+  pendingOpsTitle: "Ожидающие операции",
+  pendingOpsSub: "Счета на пополнение и заявки на вывод, ожидающие обработки.",
+  pendingOpsEmpty: "Нет операций, требующих внимания",
+  rejectOp: "Отклонить",
+  rejectOpConfirm: "Отклонить эту операцию?",
+  opRejected: "Операция отклонена",
+  opKind: { deposit: "Пополнение", withdrawal: "Вывод", transfer: "Перевод" } as Record<string, string>,
+
   // users
   usersEyebrow: "БАЗА ПОЛЬЗОВАТЕЛЕЙ", results: (q: string) => `Результаты: «${q}»`,
   cols: ["Пользователь", "Статус", "Баланс", "Покупки", "Регистрация", "Действия"],
@@ -214,6 +223,7 @@ const en: AdminDict = {
     "claude.balance_updated": "Token balance updated",
     "claude.model_updated": "Model rate updated",
     "claude.bank_replenished": "Token bank replenished",
+    "wallet.operation_rejected": "Operation rejected",
   },
   errors: {
     AUTH: "Session expired. Please sign in again.", FORBIDDEN: "Insufficient permissions.", REASON_REQUIRED: "Provide a reason of at least 5 characters.",
@@ -253,6 +263,14 @@ const en: AdminDict = {
     { t: "Confirm the result", p: "Balance changes go through a separate ledger entry." },
   ],
   noUsers: "No users yet.", sActive: "Active", sBanned: "Banned", creditTitle: "Credit balance",
+  pendingOpsTitle: "Pending Operations",
+  pendingOpsSub: "Top-up invoices and withdrawal requests awaiting action.",
+  pendingOpsEmpty: "No pending operations",
+  rejectOp: "Reject",
+  rejectOpConfirm: "Reject this operation?",
+  opRejected: "Operation rejected",
+  opKind: { deposit: "Deposit", withdrawal: "Withdrawal", transfer: "Transfer" } as Record<string, string>,
+
   usersEyebrow: "USER DATABASE", results: (q: string) => `Results: “${q}”`,
   cols: ["User", "Status", "Balance", "Purchases", "Registered", "Actions"],
   heldNote: (x: string) => `${x} reserved`, spentNote: (x: string) => `${x} spent`,
@@ -392,6 +410,7 @@ const zh: AdminDict = {
     "claude.balance_updated": "代币余额已更新",
     "claude.model_updated": "模型费率已更新",
     "claude.bank_replenished": "代币资金池已补充",
+    "wallet.operation_rejected": "操作已拒绝",
   },
   errors: {
     AUTH: "会话已过期，请重新登录。", FORBIDDEN: "权限不足。", REASON_REQUIRED: "请填写至少 5 个字符的原因。",
@@ -431,6 +450,14 @@ const zh: AdminDict = {
     { t: "确认结果", p: "余额变动通过独立的记账分录完成。" },
   ],
   noUsers: "暂无用户。", sActive: "正常", sBanned: "已封禁", creditTitle: "入账余额",
+  pendingOpsTitle: "待处理操作",
+  pendingOpsSub: "等待处理的充值账单与提现申请。",
+  pendingOpsEmpty: "没有待处理的操作",
+  rejectOp: "拒绝",
+  rejectOpConfirm: "确认拒绝此操作？",
+  opRejected: "操作已拒绝",
+  opKind: { deposit: "充值", withdrawal: "提现", transfer: "转账" } as Record<string, string>,
+
   usersEyebrow: "用户数据库", results: (q: string) => `搜索结果：「${q}」`,
   cols: ["用户", "状态", "余额", "购买", "注册时间", "操作"],
   heldNote: (x: string) => `冻结 ${x}`, spentNote: (x: string) => `已消费 ${x}`,

@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, desc, gte, isNull, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { wallets, walletOperations as ops, walletEntries, walletAudit, inventory, products, orders, users } from "@/db/schema";
-import { createInvoice, getInvoice } from "@/lib/crypto-pay";
+import { createInvoice, getInvoice, deleteInvoice } from "@/lib/crypto-pay";
 import { ensure, idempotency, validId, rateLimit, isTronAddress } from "@/lib/wallet-security";
 import { WALLET_RULES as rules, withdrawalFee, parseMoney, type WalletMode, type WalletSnapshot, type WalletOperation } from "@/lib/wallet-shared";
 import { promoDiscount } from "@/lib/networks";
@@ -62,6 +62,9 @@ export async function walletSnapshot(userId: string): Promise<WalletSnapshot> {
   const current = await account(userId);
   return db.transaction(async (tx) => {
     const w = await lock(tx, current.id);
+    // Auto-expire pending deposits older than 10 minutes (600 seconds)
+    await tx.update(ops).set({ status: "rejected", completedAt: new Date() })
+      .where(and(eq(ops.walletId, w.id), eq(ops.kind, "deposit"), eq(ops.status, "pending"), sql`${ops.createdAt} < now() - interval '10 minutes'`));
     const rows = await tx.select({ op: ops, slug: products.slug }).from(ops).leftJoin(products, eq(ops.productId, products.id)).where(eq(ops.walletId, w.id)).orderBy(desc(ops.createdAt)).limit(200);
     const [totals] = await tx.select({
       deposited: sql<number>`coalesce(sum(case when ${ops.kind} = 'deposit' and ${ops.status} = 'completed' then ${ops.amountCents} else 0 end), 0)::int`,
@@ -78,8 +81,9 @@ export async function walletSnapshot(userId: string): Promise<WalletSnapshot> {
 export async function createDeposit(userId: string, body: Record<string, unknown>) {
   const cents = amount(body.amountCents, rules.minDepositCents, rules.maxDepositCents);
   const key = idempotency(body.idempotencyKey);
-  const asset = typeof body.asset === "string" ? body.asset : "USDT";
-  ensure(["USDT", "TON", "BTC", "ETH"].includes(asset), "INVALID_METHOD");
+  const rawAsset = typeof body.asset === "string" ? body.asset : "Crypto Bot";
+  const asset = (!rawAsset || rawAsset === "Crypto Bot" || rawAsset === "crypto_bot" || rawAsset === "Crypto Pay") ? "Crypto Bot" : rawAsset;
+  ensure(["Crypto Bot", "USDT", "TON", "BTC", "ETH"].includes(asset), "INVALID_METHOD");
   const current = await account(userId);
   return db.transaction(async (tx) => {
     const w = await lock(tx, current.id); usable(w);
@@ -88,6 +92,10 @@ export async function createDeposit(userId: string, body: Record<string, unknown
       ensure(prior.kind === "deposit" && prior.amountCents === cents && prior.method === asset, "IDEMPOTENCY_CONFLICT", 409);
       return serialize(prior);
     }
+    // Auto-expire old pending deposits (> 10 mins) before checking limit
+    await tx.update(ops).set({ status: "rejected", completedAt: new Date() })
+      .where(and(eq(ops.walletId, w.id), eq(ops.kind, "deposit"), eq(ops.status, "pending"), sql`${ops.createdAt} < now() - interval '10 minutes'`));
+
     const pending = await tx.select({ total: sql<number>`coalesce(sum(${ops.amountCents}), 0)::int`, count: sql<number>`count(*)::int` }).from(ops).where(and(eq(ops.walletId, w.id), eq(ops.kind, "deposit"), eq(ops.status, "pending")));
     ensure(pending[0].count < 5, "TOO_MANY_INVOICES", 409);
     ensure(w.balanceCents + w.heldCents + pending[0].total + cents <= rules.maxBalanceCents, "BALANCE_LIMIT", 409);
@@ -106,19 +114,27 @@ export async function confirmDeposit(operationId: string, userId?: string) {
   const [initial] = await db.select({ op: ops, wallet: wallets }).from(ops).innerJoin(wallets, eq(ops.walletId, wallets.id)).where(eq(ops.id, operationId));
   ensure(initial && initial.op.kind === "deposit", "NOT_FOUND", 404);
   if (userId) ensure(initial.wallet.userId === userId, "NOT_FOUND", 404);
-  if (initial.op.status === "completed") return serialize(initial.op);
+  if (initial.op.status === "completed" || initial.op.status === "rejected" || initial.op.status === "cancelled") return serialize(initial.op);
   ensure(initial.op.externalId, "INVALID_INVOICE", 409);
+
+  // Check 10-minute timeout
+  const isTimedOut = Date.now() - initial.op.createdAt.getTime() > 10 * 60 * 1000;
+
   const invoice = await getInvoice(initial.op.externalId);
   ensure(invoice.currency_type === "fiat" && invoice.fiat === "USD" && parseMoney(invoice.amount) === initial.op.amountCents && invoice.payload === initial.op.id, "PAYMENT_MISMATCH", 409);
-  const expired = invoice.status === "expired";
+  const expired = invoice.status === "expired" || isTimedOut;
   if (invoice.status !== "paid" && !expired) return serialize(initial.op);
   return db.transaction(async (tx) => {
     const w = await lock(tx, initial.wallet.id);
     const [op] = await tx.select().from(ops).where(eq(ops.id, operationId)).for("update");
-    if (op.status === "completed") return serialize(op);
+    if (op.status === "completed" || op.status === "rejected" || op.status === "cancelled") return serialize(op);
     ensure(op.status === "pending", "INVALID_STATE", 409);
-    if (expired) {
-      const [updated] = await tx.update(ops).set({ status: "expired" }).where(eq(ops.id, op.id)).returning();
+    if (expired && invoice.status !== "paid") {
+      if (initial.op.externalId) {
+        void deleteInvoice(initial.op.externalId).catch(() => {});
+      }
+      const [updated] = await tx.update(ops).set({ status: "rejected", completedAt: new Date() }).where(eq(ops.id, op.id)).returning();
+      await tx.insert(walletAudit).values({ actor: userId ?? "system", action: "deposit.rejected", walletId: w.id, details: { operationId: op.id, reason: "timeout_or_expired" } });
       return serialize(updated);
     }
     await entry(tx, w, op.id, "deposit_credit", op.amountCents);
@@ -208,13 +224,23 @@ export async function cancelOperation(userId: string, operationId: string) {
     const w = await lock(tx, current.id);
     const [op] = await tx.select().from(ops).where(and(eq(ops.id, operationId), eq(ops.walletId, w.id))).for("update");
     ensure(op, "NOT_FOUND", 404);
-    if (op.status === "cancelled") return serialize(op);
+    if (op.status === "cancelled" || op.status === "rejected") return serialize(op);
     ensure(op.status === "pending", "CANNOT_CANCEL", 409);
-    // Invoices may already be paid at the provider; never discard them locally.
-    ensure(op.kind === "withdrawal", "CANNOT_CANCEL", 409);
-    await entry(tx, w, op.id, "withdrawal_reversal", op.amountCents, -op.amountCents);
-    const [updated] = await tx.update(ops).set({ status: "cancelled", completedAt: new Date() }).where(eq(ops.id, op.id)).returning();
-    return serialize(updated);
+    if (op.kind === "withdrawal") {
+      await entry(tx, w, op.id, "withdrawal_reversal", op.amountCents, -op.amountCents);
+      const [updated] = await tx.update(ops).set({ status: "cancelled", completedAt: new Date() }).where(eq(ops.id, op.id)).returning();
+      await tx.insert(walletAudit).values({ actor: userId, action: "withdrawal.cancelled", walletId: w.id, details: { operationId: op.id, amountCents: op.amountCents } });
+      return serialize(updated);
+    } else if (op.kind === "deposit") {
+      if (op.externalId) {
+        void deleteInvoice(op.externalId).catch(() => {});
+      }
+      const [updated] = await tx.update(ops).set({ status: "rejected", completedAt: new Date() }).where(eq(ops.id, op.id)).returning();
+      await tx.insert(walletAudit).values({ actor: userId, action: "deposit.rejected", walletId: w.id, details: { operationId: op.id, reason: "user_rejected" } });
+      return serialize(updated);
+    }
+    ensure(false, "CANNOT_CANCEL", 409);
+    return serialize(op);
   });
 }
 

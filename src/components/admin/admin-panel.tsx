@@ -105,18 +105,43 @@ function Dashboard({ admin, initialData }: { admin: SafeUser; initialData: Admin
       setAction(null); setSelected(null); await load(data.query, data.page);
     } catch (e) { setError(codeOf(e)); } finally { setBusy(false); }
   };
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+  const handleRejectOp = async (operationId: string) => {
+    if (!window.confirm(a.rejectOpConfirm)) return;
+    setRejectingId(operationId);
+    try {
+      await request("/api/admin/operations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reject", operationId }),
+      });
+      setToast(a.opRejected);
+      await load(data.query, data.page);
+    } catch (e) {
+      setError(codeOf(e));
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
   const logout = async () => { await fetch("/api/auth/logout", { method: "POST" }); location.assign("/admin"); };
   const recent = data.users.slice(0, 6);
   const go = (next: Tab) => { setTab(next); setMobile(false); };
   const icons: Record<Tab, React.ReactNode> = { overview: <LayoutDashboard size={18} />, income: <TrendingUp size={18} />, users: <UsersRound size={18} />, products: <Box size={18} />, claude: <KeyRound size={18} />, audit: <Activity size={18} /> };
-  const badge: Partial<Record<Tab, string>> = { users: String(data.stats.users), products: `${data.stats.productsActive}/${data.stats.productsTotal}`, claude: String(data.claude?.accounts.length ?? 0) };
+  const badge: Partial<Record<Tab, string>> = {
+    overview: data.pendingOperations.length > 0 ? String(data.pendingOperations.length) : undefined,
+    users: String(data.stats.users),
+    products: `${data.stats.productsActive}/${data.stats.productsTotal}`,
+    claude: String(data.claude?.accounts.length ?? 0),
+  };
 
   return <div className="ad-app">{mobile && <button className="ad-scrim" aria-label={a.closeMenu} onClick={() => setMobile(false)} />}
     <aside className={`ad-sidebar ${mobile ? "open" : ""}`}><a href="/admin" className="ad-brand"><img src="/logo.svg" alt="" /><span>LIVKA<b>CONTROL</b><small>ADMIN WORKSPACE</small></span></a><nav><span>{a.navLabel}</span>{TABS.map((id) => <button key={id} className={tab === id ? "active" : ""} onClick={() => go(id)}>{icons[id]}{a.tab[id]}{badge[id] && <i>{badge[id]}</i>}</button>)}</nav><div className="ad-sidebar-bottom"><div className="ad-mode"><span />{a.liveMode}</div><a href="/"><ArrowLeft size={16} />{a.backToSite}</a><button onClick={logout}><LogOut size={16} />{a.endSession}</button><div className="ad-admin"><span>{admin.name[0].toUpperCase()}</span><div><b>{admin.name}</b><small>{admin.customerId}</small></div><ShieldCheck size={16} /></div></div></aside>
     <div className="ad-workspace"><header><button className="ad-menu" aria-label={a.openMenu} onClick={() => setMobile(true)}><Menu size={20} /></button><div><span>{a.panelLabel}</span><strong>{a.tab[tab]}</strong></div><div className="ad-header-right"><LangSwitch /><div className="ad-header-status"><span />{a.systemOk}</div></div></header>
       <main><div className="ad-heading"><div><span className="ad-kicker">LIVKAMARKET · CONTROL CENTER</span><h1>{a.heading[tab]}</h1><p>{a.subtitle[tab]}</p></div>{(tab === "overview" || tab === "users") && <form className="ad-search" onSubmit={(e) => { e.preventDefault(); setTab("users"); void load(query, 1); }}><Search size={17} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={a.searchPh} /><button disabled={loading}>{loading ? <LoaderCircle className="ad-spin" size={16} /> : a.find}</button></form>}</div>
       {error && !action && <div className="ad-error ad-page-error">{errText(error)}<button onClick={() => load(data.query, data.page)}>{a.retry}</button></div>}
-      {tab === "overview" && <Overview data={data} users={recent} onUsers={() => setTab("users")} onIncome={() => setTab("income")} onAction={open} />}
+      {tab === "overview" && <Overview data={data} users={recent} onUsers={() => setTab("users")} onIncome={() => setTab("income")} onAction={open} onRejectOp={handleRejectOp} rejectingId={rejectingId} />}
       {tab === "income" && <RevenuePanel revenue={data.revenue} />}
       {tab === "users" && <UsersTable data={data} loading={loading} onAction={open} onPage={(page) => load(data.query, page)} />}
       {tab === "products" && <ProductsPanel products={data.products} tokenModels={data.tokenModels} onChanged={async (text) => { setToast(text); await load(data.query, data.page); }} />}
@@ -129,7 +154,7 @@ function Dashboard({ admin, initialData }: { admin: SafeUser; initialData: Admin
   </div>;
 }
 
-function Overview({ data, users, onUsers, onIncome, onAction }: { data: AdminDashboardData; users: AdminUserRow[]; onUsers: () => void; onIncome: () => void; onAction: (u: AdminUserRow, a: Action) => void }) {
+function Overview({ data, users, onUsers, onIncome, onAction, onRejectOp, rejectingId }: { data: AdminDashboardData; users: AdminUserRow[]; onUsers: () => void; onIncome: () => void; onAction: (u: AdminUserRow, a: Action) => void; onRejectOp: (id: string) => void; rejectingId: string | null }) {
   const { a, intl } = useA();
   const cards = [
     { label: a.cIncome, value: money(data.revenue.totalCents, true), note: a.cIncomeNote(money(data.revenue.monthCents, true)), icon: <CircleDollarSign />, tone: "amber", onClick: onIncome },
@@ -138,7 +163,81 @@ function Overview({ data, users, onUsers, onIncome, onAction }: { data: AdminDas
     { label: a.cOrders, value: data.stats.orders.toLocaleString(intl), note: a.grantedN(data.stats.granted), icon: <PackageCheck />, tone: "blue" },
     { label: a.cBanned, value: data.stats.banned.toLocaleString(intl), note: a.cBannedNote, icon: <Ban />, tone: "rose" },
   ];
-  return <><section className="ad-stats ad-stats-5">{cards.map((card) => <article key={card.label} className={card.onClick ? "clickable" : ""} onClick={card.onClick}><span className={card.tone}>{card.icon}</span><div><small>{card.label}</small><b>{card.value}</b><p>{card.note}</p></div></article>)}</section><section className="ad-grid"><div className="ad-card"><div className="ad-card-head"><div><span>{a.recentEyebrow}</span><h2>{a.newUsers}</h2></div><button onClick={onUsers}>{a.allUsers} <ChevronRight size={14} /></button></div><MiniUsers users={users} onAction={onAction} /></div><div className="ad-card ad-quick"><div className="ad-card-head"><div><span>{a.quickEyebrow}</span><h2>{a.quickTitle}</h2></div><Sparkles size={20} /></div><ol>{a.quick.map((step, i) => <li key={step.t}><span>{i === 3 ? <Check size={13} /> : `0${i + 1}`}</span><div><b>{step.t}</b><p>{step.p}</p></div></li>)}</ol></div></section></>;
+  return <>
+    <section className="ad-stats ad-stats-5">{cards.map((card) => <article key={card.label} className={card.onClick ? "clickable" : ""} onClick={card.onClick}><span className={card.tone}>{card.icon}</span><div><small>{card.label}</small><b>{card.value}</b><p>{card.note}</p></div></article>)}</section>
+    {data.pendingOperations.length > 0 && <PendingOperations ops={data.pendingOperations} onReject={onRejectOp} busyId={rejectingId} />}
+    <section className="ad-grid"><div className="ad-card"><div className="ad-card-head"><div><span>{a.recentEyebrow}</span><h2>{a.newUsers}</h2></div><button onClick={onUsers}>{a.allUsers} <ChevronRight size={14} /></button></div><MiniUsers users={users} onAction={onAction} /></div><div className="ad-card ad-quick"><div className="ad-card-head"><div><span>{a.quickEyebrow}</span><h2>{a.quickTitle}</h2></div><Sparkles size={20} /></div><ol>{a.quick.map((step, i) => <li key={step.t}><span>{i === 3 ? <Check size={13} /> : `0${i + 1}`}</span><div><b>{step.t}</b><p>{step.p}</p></div></li>)}</ol></div></section>
+  </>;
+}
+
+function PendingOperations({
+  ops,
+  onReject,
+  busyId,
+}: {
+  ops: AdminDashboardData["pendingOperations"];
+  onReject: (id: string) => void;
+  busyId: string | null;
+}) {
+  const { a, intl } = useA();
+  if (!ops.length) return null;
+  return (
+    <section className="ad-card" style={{ marginBottom: "22px" }}>
+      <div className="ad-card-head">
+        <div>
+          <span>{a.pendingOpsTitle}</span>
+          <h2>{a.pendingOpsSub} <i>{ops.length}</i></h2>
+        </div>
+      </div>
+      <div className="ad-table">
+        <div className="ad-tr ad-th">
+          <span>{a.cols[0]}</span>
+          <span>{a.cols[1]}</span>
+          <span>Метод</span>
+          <span>{a.cols[2]}</span>
+          <span>{a.cols[4]}</span>
+          <span>{a.cols[5]}</span>
+        </div>
+        {ops.map((op) => (
+          <div className="ad-tr" key={op.id}>
+            <span className="ad-user">
+              <span className="ad-avatar">{op.userName ? op.userName[0].toUpperCase() : "U"}</span>
+              <span>
+                <b>{op.userName ?? "—"}</b>
+                <small>{op.userEmail ?? op.customerId}</small>
+              </span>
+            </span>
+            <span>
+              <span className={`ad-status ${op.kind === "deposit" ? "active" : "banned"}`}>
+                {a.opKind[op.kind] ?? op.kind}
+              </span>
+            </span>
+            <span style={{ fontSize: "10px", color: "#a599ac" }}>
+              {op.method ?? "—"}
+            </span>
+            <span className="ad-money">
+              <b>{money(op.amountCents)}</b>
+            </span>
+            <span className="ad-date">
+              {new Date(op.createdAt).toLocaleString(intl, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+            </span>
+            <span className="ad-actions">
+              <button
+                className="danger"
+                title={a.rejectOp}
+                disabled={busyId === op.id}
+                onClick={() => onReject(op.id)}
+                style={{ width: "auto", padding: "0 10px", fontSize: "10px", gap: "5px" }}
+              >
+                {busyId === op.id ? <LoaderCircle className="ad-spin" size={13} /> : <X size={13} />}
+                <span>{a.rejectOp}</span>
+              </button>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function StatusPill({ status, tag = "span" }: { status: "active" | "banned"; tag?: "span" | "i" }) {
