@@ -52,15 +52,4 @@ CREATE TABLE IF NOT EXISTS site_news (
 CREATE INDEX IF NOT EXISTS site_news_published_idx
   ON site_news (is_published, is_pinned DESC, created_at DESC);
 
--- Seed initial welcome news announcement if empty
-INSERT INTO site_news (title, content, tag, is_pinned, is_published, author_name)
-SELECT
-  'Грандиозное открытие LIVKAMARKET! 🚀',
-  'Добро пожаловать в LIVKAMARKET — платформу доступа к нейросетям Claude Opus 5.5, API токенам и премиум аккаунтам. В честь нашего запуска действует акция: токены Claude API доступны всего по $0.10 за 1M токенов вместо $0.30! Пополняйте баланс удобным способом и подключайте Claude API напрямую.',
-  'Акция',
-  true,
-  true,
-  'Администрация'
-WHERE NOT EXISTS (SELECT 1 FROM site_news LIMIT 1);
-
 COMMIT;

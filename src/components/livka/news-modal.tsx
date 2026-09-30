@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { Calendar, Flame, Newspaper, Pin, Sparkles, Tag, X } from "lucide-react";
 import type { NewsRow } from "@/db/schema";
 import { WalletModal } from "@/components/livka/wallet-primitives";
+import { useW } from "@/components/livka/i18n-context";
 
 export function UserNewsModal({ onClose }: { onClose: () => void }) {
+  const { w, intl } = useW();
   const [items, setItems] = useState<NewsRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,24 +25,24 @@ export function UserNewsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <WalletModal
-      title="Новости и обновления"
-      subtitle="Официальные анонсы, скидки и новости сервиса LIVKAMARKET"
+      title={w.newsModal.title}
+      subtitle={w.newsModal.subtitle}
       onClose={onClose}
       wide
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxHeight: "65vh", overflowY: "auto", paddingRight: "4px" }}>
         {loading ? (
           <div style={{ textAlign: "center", padding: "30px", color: "#94a3b8" }}>
-            Загрузка новостей…
+            {w.newsModal.loading}
           </div>
         ) : items.length === 0 ? (
           <div style={{ textAlign: "center", padding: "30px", color: "#94a3b8" }}>
             <Newspaper size={32} style={{ margin: "0 auto 10px", opacity: 0.5 }} />
-            <p>Новостей пока нет. Следите за обновлениями!</p>
+            <p>{w.newsModal.emptyText}</p>
           </div>
         ) : (
           items.map((item) => {
-            const dateStr = new Date(item.createdAt).toLocaleDateString("ru-RU", {
+            const dateStr = new Date(item.createdAt).toLocaleDateString(intl, {
               day: "numeric",
               month: "short",
               year: "numeric",
@@ -67,7 +69,7 @@ export function UserNewsModal({ onClose }: { onClose: () => void }) {
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     {item.isPinned && (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "rgba(59, 130, 246, 0.2)", color: "#60a5fa", border: "1px solid rgba(59, 130, 246, 0.4)", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", fontWeight: 700 }}>
-                        <Pin size={11} /> Закреплено
+                        <Pin size={11} /> {w.newsModal.pinned}
                       </span>
                     )}
                     <span style={{ background: "rgba(245, 158, 11, 0.15)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "6px", padding: "2px 8px", fontSize: "11px", fontWeight: 700 }}>

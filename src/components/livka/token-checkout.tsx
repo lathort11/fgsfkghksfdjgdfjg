@@ -197,7 +197,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
                 {money(data.pricePerMillionCents, true)}
               </span>
               <span style={{ fontSize: "12px", color: "var(--wk-muted, #94a3b8)" }}>
-                / 1M токенов ({data.discount.reason})
+                {copy.perMillionTokens(data.discount.reason)}
               </span>
             </div>
           </div>
