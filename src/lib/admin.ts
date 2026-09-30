@@ -552,10 +552,8 @@ export async function getAdminClaudeData(): Promise<AdminClaudeData> {
 
 export async function adminIssueTokenKey(
   actor: SafeUser,
-  params: { userId: string; initialTokens?: number; label?: string; note?: string }
   params: { userId: string; initialTokens?: number; label?: string; note?: string; balanceMode?: "replace" | "add" }
 ) {
-  const { userId, initialTokens = 0, label, note } = params;
   const { userId, initialTokens = 0, label, note, balanceMode = "replace" } = params;
   adminEnsure(validId(userId), "INVALID_USER");
   return db.transaction(async (tx) => {
