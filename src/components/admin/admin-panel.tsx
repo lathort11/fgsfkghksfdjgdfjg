@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   Activity, ArrowLeft, Ban, Box, Check, ChevronLeft, ChevronRight, CircleDollarSign,
   Copy, Eye, EyeOff, Gift, KeyRound, LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, Menu, PackageCheck,
-  Plus, Search, ShieldCheck, Sparkles, Tag, TrendingUp, Unlock, UsersRound, WalletCards, X,
+  Plus, Percent, Search, ShieldCheck, Sparkles, Tag, TrendingUp, Unlock, UsersRound, WalletCards, X,
 } from "lucide-react";
 import type { SafeUser } from "@/lib/session";
 import type { AdminDashboardData, AdminUserRow } from "@/lib/admin";
