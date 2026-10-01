@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { Unbounded, Onest, Noto_Sans_SC } from "next/font/google";
+import { Unbounded, Onest } from "next/font/google";
 import { getLocale } from "@/lib/locale-server";
 import "./globals.css";
 
@@ -15,13 +15,6 @@ const body = Onest({
   subsets: ["latin", "cyrillic"],
   weight: ["300", "400", "500", "600", "700"],
   variable: "--font-body",
-  display: "swap",
-});
-
-const cjk = Noto_Sans_SC({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-sc",
   display: "swap",
 });
 
@@ -46,7 +39,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const locale = await getLocale();
   return (
-    <html lang={locale} className={`${display.variable} ${body.variable} ${cjk.variable}`}>
+    <html lang={locale} className={`${display.variable} ${body.variable}`}>
       <body className="relative min-h-screen bg-[#0b0b10]">
         {children}
       </body>
