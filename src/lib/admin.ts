@@ -812,6 +812,105 @@ export async function adminReplenishTokenBank(actor: SafeUser, addTokens: number
   });
 }
 
+export async function adminSetTokenBank(actor: SafeUser, exactTokens: number, note?: string) {
+  adminEnsure(typeof exactTokens === "number" && Number.isFinite(exactTokens) && exactTokens >= 0, "INVALID_AMOUNT");
+  const target = Math.min(400_000_000, Math.trunc(exactTokens));
+  return db.transaction(async (tx) => {
+    const [bank] = await tx.select().from(tokenBank).limit(1).for("update");
+    adminEnsure(bank, "BANK_NOT_FOUND", 404);
+
+    await tx.update(tokenBank).set({
+      availableTokens: target,
+      updatedAt: new Date(),
+    }).where(eq(tokenBank.productId, bank.productId));
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      action: "claude.bank_set",
+      details: { previousAvailable: bank.availableTokens, newAvailable: target, ...(note ? { note } : {}) },
+    });
+
+    return { ok: true, availableTokens: target };
+  });
+}
+
+export async function checkUpstreamCheatAiKey(apiKey: string) {
+  const cleanKey = String(apiKey || "").trim();
+  adminEnsure(cleanKey.startsWith("sk-ant-"), "INVALID_KEY_FORMAT");
+
+  try {
+    const res = await fetch("https://cheat-ai.shop/dashboard/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: cleanKey }),
+      cache: "no-store",
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.type === "error" || data.error) {
+      const msg = data?.error?.message || `HTTP ${res.status}`;
+      return { ok: false, error: msg === "api_key_not_found" ? "Ключ не найден у поставщика" : msg };
+    }
+
+    const info = data.api_key || {};
+    const tokensTotal = Number(info.token_limit) || 0;
+    const tokensUsed = Math.max(0, Number(info.tokens_used) || 0);
+    let tokensRemaining = Number(info.tokens_remaining);
+    if (!Number.isFinite(tokensRemaining) || tokensRemaining < 0) {
+      tokensRemaining = Math.max(0, tokensTotal - tokensUsed);
+    }
+
+    return {
+      ok: true,
+      keyPreview: String(info.key_preview || cleanKey.slice(0, 14) + "••••"),
+      tokensTotal,
+      tokensUsed,
+      tokensRemaining,
+      percentUsed: Number(info.percent_used) || (tokensTotal > 0 ? (tokensUsed / tokensTotal) * 100 : 0),
+      isActive: Boolean(info.is_active ?? true),
+      isExhausted: Boolean(info.is_exhausted),
+      isUnlimited: Boolean(info.is_unlimited),
+      expiresAt: info.expires_at ? Number(info.expires_at) : null,
+      raw: info,
+    };
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Failed to connect to upstream service" };
+  }
+}
+
+export async function adminSyncTokenBankWithUpstream(actor: SafeUser, apiKey: string, note?: string) {
+  const upstream = await checkUpstreamCheatAiKey(apiKey);
+  if (!upstream.ok || upstream.tokensRemaining == null) {
+    throw new Error(upstream.error || "Не удалось получить остаток с ключа поставщика");
+  }
+
+  const freeTokens = Math.min(400_000_000, Math.max(0, Math.trunc(upstream.tokensRemaining)));
+  return db.transaction(async (tx) => {
+    const [bank] = await tx.select().from(tokenBank).limit(1).for("update");
+    adminEnsure(bank, "BANK_NOT_FOUND", 404);
+
+    await tx.update(tokenBank).set({
+      availableTokens: freeTokens,
+      updatedAt: new Date(),
+    }).where(eq(tokenBank.productId, bank.productId));
+
+    await tx.insert(adminAudit).values({
+      actorUserId: actor.id,
+      action: "claude.bank_synced_upstream",
+      details: {
+        upstreamKeyPreview: upstream.keyPreview,
+        upstreamTokensRemaining: upstream.tokensRemaining,
+        upstreamTokensTotal: upstream.tokensTotal,
+        previousAvailable: bank.availableTokens,
+        newAvailable: freeTokens,
+        ...(note ? { note } : {}),
+      },
+    });
+
+    return { ok: true, availableTokens: freeTokens, upstream };
+  });
+}
+
 export async function adminRejectOperation(
   actor: SafeUser,
   operationIdValue: unknown,

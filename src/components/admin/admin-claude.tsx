@@ -604,6 +604,22 @@ function BankPanel({
   const { a } = useA();
   const c = a.claude;
   const [busy, setBusy] = useState(false);
+  const [exactTokensInput, setExactTokensInput] = useState(String(stats.bankAvailable));
+
+  // Upstream key checking state
+  const [upstreamKey, setUpstreamKey] = useState("");
+  const [upstreamBusy, setUpstreamBusy] = useState(false);
+  const [upstreamInfo, setUpstreamInfo] = useState<{
+    ok: boolean;
+    keyPreview: string;
+    tokensTotal: number;
+    tokensUsed: number;
+    tokensRemaining: number;
+    percentUsed: number;
+    isActive: boolean;
+    isExhausted: boolean;
+    error?: string;
+  } | null>(null);
 
   const replenish = async (amount: number) => {
     setBusy(true);
@@ -618,11 +634,96 @@ function BankPanel({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "SERVER");
-      await onChanged(`+${formatTokens(amount)}: ${c.replenishBank}`);
+      await onChanged(`+${formatTokens(amount)}: пополнение банка`);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const setExactTokens = async () => {
+    const val = parseInt(exactTokensInput.replace(/\D/g, ""), 10);
+    if (isNaN(val) || val < 0) {
+      alert("Введите корректное число токенов");
+      return;
+    }
+    if (!window.confirm(`Установить свободный остаток банка: ${val.toLocaleString()} токенов?`)) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set-bank",
+          exactTokens: val,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "SERVER");
+      await onChanged(`Свободно токенов установлено: ${val.toLocaleString()}`);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkUpstream = async () => {
+    if (!upstreamKey.trim().startsWith("sk-ant-")) {
+      alert("Введите корректный ключ поставщика, начинающийся с sk-ant-");
+      return;
+    }
+    setUpstreamBusy(true);
+    setUpstreamInfo(null);
+    try {
+      const res = await fetch("/api/admin/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "check-upstream",
+          apiKey: upstreamKey.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.result?.ok) {
+        throw new Error(data.result?.error || data.error || "Не удалось проверить ключ");
+      }
+      setUpstreamInfo(data.result);
+    } catch (e: any) {
+      alert(e.message || "Ошибка проверки ключа");
+    } finally {
+      setUpstreamBusy(false);
+    }
+  };
+
+  const syncUpstream = async () => {
+    if (!upstreamKey.trim().startsWith("sk-ant-")) {
+      alert("Введите ключ поставщика (sk-ant-...)");
+      return;
+    }
+    if (!window.confirm("Установить свободный остаток банка равным остатку на этом ключе?")) return;
+    setUpstreamBusy(true);
+    try {
+      const res = await fetch("/api/admin/claude", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sync-upstream",
+          apiKey: upstreamKey.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.result?.ok) {
+        throw new Error(data.result?.error || data.error || "Не удалось синхронизировать");
+      }
+      setUpstreamInfo(data.result.upstream);
+      setExactTokensInput(String(data.result.availableTokens));
+      await onChanged(`Банк синхронизирован: свободно ${data.result.availableTokens.toLocaleString()} токенов`);
+    } catch (e: any) {
+      alert(e.message || "Ошибка синхронизации");
+    } finally {
+      setUpstreamBusy(false);
     }
   };
 
@@ -633,34 +734,59 @@ function BankPanel({
       <div className="ad-card-head-sub">
         <div>
           <h3>{c.bankTitle}</h3>
-          <p>{c.bankSubtitle}</p>
+          <p>Управление доступным пулом токенов и мониторинг остатка у поставщика</p>
         </div>
       </div>
 
       <div className="ad-bank-card">
+        {/* Main Bank Visual */}
         <div className="ad-bank-visual">
           <div className="ad-bank-numbers">
             <div>
-              <small>Available in Bank</small>
-              <b>{stats.bankAvailable.toLocaleString()}</b>
-              <span>{formatTokens(stats.bankAvailable)} tokens</span>
+              <small>Свободно для покупки (в наличии)</small>
+              <b style={{ color: "#3bbd7a" }}>{stats.bankAvailable.toLocaleString()}</b>
+              <span>{formatTokens(stats.bankAvailable)} свободно прямо сейчас</span>
             </div>
             <div>
-              <small>System Hard Cap</small>
+              <small>Лимит пула системы</small>
               <b>{stats.bankCap.toLocaleString()}</b>
-              <span>{formatTokens(stats.bankCap)} tokens</span>
+              <span>{formatTokens(stats.bankCap)} максимум</span>
             </div>
           </div>
 
           <div className="ad-bank-progress-track">
-            <div className="ad-bank-progress-bar" style={{ width: `${pct}%` }} />
+            <div className="ad-bank-progress-bar" style={{ width: `${pct}%`, background: "linear-gradient(90deg, #238652, #3bbd7a)" }} />
           </div>
-          <div className="ad-bank-pct">{pct}% capacity remaining</div>
+          <div className="ad-bank-pct" style={{ color: "#3bbd7a", fontWeight: 600 }}>{pct}% свободно в наличии</div>
         </div>
 
+        {/* Set exact tokens manual control */}
+        <div className="ad-bank-set-box">
+          <h4>Установить точный свободный остаток токенов</h4>
+          <p>Задайте точное количество токенов, доступных для покупки на сайте (при покупках клиентами это число автоматически уменьшается):</p>
+          <div className="ad-bank-set-row">
+            <input
+              type="text"
+              className="ad-bank-input"
+              value={exactTokensInput}
+              onChange={(e) => setExactTokensInput(e.target.value)}
+              placeholder="300000000"
+            />
+            <button
+              className="ad-bank-action-btn"
+              disabled={busy}
+              onClick={setExactTokens}
+            >
+              {busy ? <LoaderCircle className="ad-spin" size={14} /> : <Check size={14} />}
+              Сохранить свободный остаток
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Replenish */}
         <div className="ad-bank-replenish-box">
-          <h4>{c.replenishBank}</h4>
-          <p>Instantly inject tokens into the reserve pool for customers:</p>
+          <h4>Быстрое пополнение пула</h4>
+          <p>Добавить токены к текущему свободному остатку:</p>
           <div className="ad-replenish-buttons">
             {[10_000_000, 50_000_000, 100_000_000, 200_000_000].map((amt) => (
               <button
@@ -673,6 +799,71 @@ function BankPanel({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Upstream Key Checker (cheat-ai.shop / NexoraX) */}
+        <div className="ad-upstream-box">
+          <div className="ad-upstream-header">
+            <h4><ShieldCheck size={18} style={{ color: "#8452bf" }} /> Проверка баланса ключа поставщика (cheat-ai.shop)</h4>
+            <span>Реверс-эндпоинт /dashboard/lookup</span>
+          </div>
+          <p style={{ fontSize: "11px", color: "#8f82a1", margin: 0 }}>
+            Введите API-ключ, купленный у поставщика, чтобы узнать реальный оставшийся баланс токенов и синхронизировать его с сайтом:
+          </p>
+          <div className="ad-bank-set-row">
+            <input
+              type="text"
+              className="ad-bank-input"
+              style={{ fontFamily: "ui-monospace, monospace" }}
+              value={upstreamKey}
+              onChange={(e) => setUpstreamKey(e.target.value)}
+              placeholder="sk-ant-..."
+            />
+            <button
+              className="ad-bank-action-btn"
+              style={{ background: "#392a4f" }}
+              disabled={upstreamBusy || !upstreamKey.trim()}
+              onClick={checkUpstream}
+            >
+              {upstreamBusy ? <LoaderCircle className="ad-spin" size={14} /> : <RefreshCw size={14} />}
+              Проверить баланс ключа
+            </button>
+            <button
+              className="ad-upstream-sync-btn"
+              disabled={upstreamBusy || !upstreamKey.trim()}
+              onClick={syncUpstream}
+            >
+              <Vault size={15} />
+              Синхронизировать банк с ключом
+            </button>
+          </div>
+
+          {upstreamInfo && (
+            <div className="ad-upstream-stats-grid">
+              <div className="ad-upstream-stat-card">
+                <small>Осталось на ключе</small>
+                <b style={{ color: "#3bbd7a" }}>{upstreamInfo.tokensRemaining.toLocaleString()}</b>
+                <p>{formatTokens(upstreamInfo.tokensRemaining)} свободно</p>
+              </div>
+              <div className="ad-upstream-stat-card">
+                <small>Израсходовано</small>
+                <b style={{ color: "#d48b9b" }}>{upstreamInfo.tokensUsed.toLocaleString()}</b>
+                <p>{upstreamInfo.percentUsed.toFixed(1)}% использовано</p>
+              </div>
+              <div className="ad-upstream-stat-card">
+                <small>Общий лимит ключа</small>
+                <b>{upstreamInfo.tokensTotal.toLocaleString()}</b>
+                <p>{formatTokens(upstreamInfo.tokensTotal)}</p>
+              </div>
+              <div className="ad-upstream-stat-card">
+                <small>Статус ключа</small>
+                <b style={{ color: upstreamInfo.isActive && !upstreamInfo.isExhausted ? "#3bbd7a" : "#d48b9b" }}>
+                  {upstreamInfo.isExhausted ? "Исчерпан" : upstreamInfo.isActive ? "Активен" : "Отключен"}
+                </b>
+                <p>{upstreamInfo.keyPreview}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

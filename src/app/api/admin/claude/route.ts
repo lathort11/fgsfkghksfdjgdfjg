@@ -3,9 +3,12 @@ import {
   adminIssueTokenKey,
   adminRegenerateTokenKey,
   adminReplenishTokenBank,
+  adminSetTokenBank,
+  adminSyncTokenBankWithUpstream,
   adminToggleTokenAccount,
   adminUpdateTokenBalance,
   adminUpdateTokenModelRate,
+  checkUpstreamCheatAiKey,
   getAdminClaudeData,
 } from "@/lib/admin";
 import { adminEnsure, adminFailure, requireAdmin } from "@/lib/admin-auth";
@@ -101,6 +104,28 @@ export async function POST(req: Request) {
         const addTokens = Math.max(1, Math.trunc(Number(raw.addTokens ?? 0)));
         const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
         result = await adminReplenishTokenBank(admin, addTokens, note);
+        break;
+      }
+
+      case "set-bank": {
+        const exactTokens = Math.max(0, Math.trunc(Number(raw.exactTokens ?? 0)));
+        const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
+        result = await adminSetTokenBank(admin, exactTokens, note);
+        break;
+      }
+
+      case "check-upstream": {
+        const apiKey = String(raw.apiKey ?? "").trim();
+        adminEnsure(apiKey.startsWith("sk-ant-"), "INVALID_KEY_FORMAT");
+        result = await checkUpstreamCheatAiKey(apiKey);
+        break;
+      }
+
+      case "sync-upstream": {
+        const apiKey = String(raw.apiKey ?? "").trim();
+        adminEnsure(apiKey.startsWith("sk-ant-"), "INVALID_KEY_FORMAT");
+        const note = typeof raw.note === "string" ? raw.note.trim() : undefined;
+        result = await adminSyncTokenBankWithUpstream(admin, apiKey, note);
         break;
       }
 

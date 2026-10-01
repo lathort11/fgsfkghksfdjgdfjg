@@ -293,6 +293,12 @@ main();`,
               <span>{ks.currentBalance}</span>
               <strong>{formatTokens(currentTokens, intl)}</strong>
             </div>
+            {tokens.bankAvailableTokens != null && (
+              <div style={{ fontSize: "11px", color: "#3bbd7a", display: "flex", alignItems: "center", gap: "6px", margin: "4px 0 8px" }}>
+                <span className="wk-claude-stock-dot" />
+                <span>Свободно для покупки: <b>{formatTokens(tokens.bankAvailableTokens, intl)}</b></span>
+              </div>
+            )}
             <p className="wk-balance-sub">
               Расход списывается строго по факту генерации (входные и выходные токены).
             </p>
