@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { tokenSnapshot, purchaseTokens } from "@/lib/tokens";
 import { walletUser, readBody, walletFailure } from "@/lib/wallet-security";
 import { deliverOrderToTelegram } from "@/lib/order-delivery";
+import { sendApiKeyToTelegram } from "@/lib/telegram-key-delivery";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,13 @@ export async function POST(req: Request) {
     const body = await readBody(req);
     const result = await purchaseTokens(user.id, body);
     let sentToTelegram = false;
-    if (result.justDelivered && user.telegramId) {
-      const [product] = await db.select().from(products).where(eq(products.id, result.order.productId)).limit(1);
-      if (product) sentToTelegram = await deliverOrderToTelegram({ order: result.order, product }, user.telegramId).catch(() => false);
+    if (result.justDelivered) {
+      const delivery = await sendApiKeyToTelegram(user.id).catch(() => ({ sentToTelegram: false }));
+      sentToTelegram = delivery.sentToTelegram;
+      if (user.telegramId) {
+        const [product] = await db.select().from(products).where(eq(products.id, result.order.productId)).limit(1);
+        if (product) await deliverOrderToTelegram({ order: result.order, product }, user.telegramId).catch(() => false);
+      }
     }
     return Response.json({ ok: true, order: result.order, apiKey: result.apiKey, tokens: await tokenSnapshot(user.id), sentToTelegram });
   } catch (error) { return walletFailure(error); }

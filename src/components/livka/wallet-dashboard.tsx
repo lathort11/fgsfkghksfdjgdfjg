@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, Eye, EyeOff, Headphones, HelpCircle, LayoutGrid, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, ShoppingBag, Sparkles, Wallet, X, Zap, CircleCheck, CircleUserRound, Send, ReceiptText, LockKeyhole } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Download, Eye, EyeOff, Headphones, HelpCircle, LayoutGrid, LogOut, Menu, Plus, Search, Settings2, ShieldCheck, ShoppingBag, Sparkles, Wallet, X, Zap, CircleCheck, CircleUserRound, Send, ReceiptText, LockKeyhole, KeyRound } from "lucide-react";
 import type { ProductRow } from "@/db/schema";
 import { AuthModal, type SessionUser } from "@/components/livka/auth";
 import { ProfileModal } from "@/components/livka/profile";
 import { ProductTile } from "@/components/livka/product-art";
 import { BalanceCheckout } from "@/components/livka/balance-checkout";
 import { TokenCheckout } from "@/components/livka/token-checkout";
+import { ApiKeyPanel } from "@/components/livka/api-key-panel";
 import { useW } from "@/components/livka/i18n-context";
 import { LangSwitch } from "@/components/livka/lang-switch";
 import { AmountInput, AssetSelect, Presets, TopUpModal, WithdrawModal, OperationModal, WalletRulesModal } from "@/components/livka/wallet-actions";
@@ -16,8 +17,8 @@ import { WalletModal, WalletErrorBox, Busy, walletRequest, errorMessage, opTitle
 import { emptyWallet, money, parseMoney, WALLET_RULES, type WalletOperation, type WalletSnapshot } from "@/lib/wallet-shared";
 import { balanceOf, formatBankTokens, formatTokens, isTokenProduct, type TokenSnapshot } from "@/lib/tokens-shared";
 
-export type WalletSection = "wallet" | "catalog" | "purchases" | "history";
-const isSection = (s: string | null): s is WalletSection => !!s && ["wallet", "catalog", "purchases", "history"].includes(s);
+export type WalletSection = "wallet" | "catalog" | "purchases" | "history" | "key";
+const isSection = (s: string | null): s is WalletSection => !!s && ["wallet", "catalog", "purchases", "history", "key"].includes(s);
 const MIN_TOPUP = WALLET_RULES.minDepositCents / 100, MAX_TOPUP = WALLET_RULES.maxDepositCents / 100;
 
 export default function WalletDashboard({ products, initialUser, initialWallet, initialTokens, initialSection = "wallet" }: { products: ProductRow[]; initialUser: SessionUser | null; initialWallet: WalletSnapshot | null; initialTokens: TokenSnapshot; initialSection?: WalletSection }) {
@@ -108,6 +109,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
   const bankText = formatBankTokens(tokens.bankAvailableTokens, locale);
   const filteredProducts = products.filter((p) => `${t.products[p.slug as keyof typeof t.products]?.name ?? p.slug} ${p.kind}`.toLowerCase().includes(search.toLowerCase()));
   const firstName = user ? user.name.split(" ")[0] : "";
+  const hasApiKey = Boolean(user && (tokens.apiKey || tokens.balances?.some((b) => (b.inputTokens + b.outputTokens) > 0)));
 
   return <div className="wk-app">
     {mobileNav && <button className="wk-nav-scrim" aria-label={w.closeMenu} onClick={() => setMobileNav(false)} />}
@@ -116,6 +118,13 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
       <div className="wk-nav-group"><span className="wk-nav-label">{w.navMarket}</span><button className={`wk-nav-item ${section === "catalog" ? "active" : ""}`} onClick={() => navigate("catalog")}><LayoutGrid size={19} /><span>{w.navCatalog}</span><i>{products.length}</i></button></div>
       <div className="wk-nav-group"><span className="wk-nav-label">{w.navPersonal}</span>
         <button className={`wk-nav-item ${section === "wallet" ? "active" : ""}`} onClick={() => navigate("wallet")}><Wallet size={19} /><span>{w.navWallet}</span><span className="wk-new">NEW</span></button>
+        {hasApiKey && (
+          <button className={`wk-nav-item wk-nav-key ${section === "key" ? "active" : ""}`} onClick={() => navigate("key")}>
+            <KeyRound size={19} />
+            <span>{w.navKey ?? "Ключ"}</span>
+            <span className="wk-new" style={{ background: "#7c3aed" }}>API</span>
+          </button>
+        )}
         <button className={`wk-nav-item ${section === "purchases" ? "active" : ""}`} onClick={() => navigate("purchases")}><ShoppingBag size={19} /><span>{w.navPurchases}</span></button>
         <button className={`wk-nav-item ${section === "history" ? "active" : ""}`} onClick={() => navigate("history")}><ArrowLeftRight size={19} /><span>{w.navHistory}</span></button>
         <button className="wk-nav-item" onClick={() => { if (user) { setProfileOpen(true); setMobileNav(false); } else askAuth("profile"); }}><Settings2 size={19} /><span>{w.navSettings}</span></button>
@@ -153,6 +162,7 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
             <div className="wk-product-price"><div><b>{money(p.priceCents)}</b><span>{t.per[p.per as keyof typeof t.per]}</span></div><button className="wk-button wk-secondary" onClick={() => buy(p)}>{w.buy} <ArrowUpRight size={16} /></button></div>
           )}</article>; })}</div>{filteredProducts.length === 0 && <div className="wk-empty"><Search size={32} /><h3>{w.nothingFound}</h3><p>{w.tryOther}</p><button className="wk-text-button" onClick={() => setSearch("")}>{w.resetSearch}</button></div>}</>}
       {section === "purchases" && <PurchasesPanel user={user} version={version} tokens={tokens} onBuyTokens={() => { const p = products.find(isTokenProduct); if (p) buy(p); }} onCatalog={() => navigate("catalog")} onLogin={() => askAuth("purchases")} />}
+      {section === "key" && <ApiKeyPanel user={user} tokens={tokens} onBuyTokens={() => { const p = products.find(isTokenProduct); if (p) buy(p); }} />}
 
       <div className="wk-bottom-note"><ShieldCheck size={17} /><p><strong>{w.noteStrong}</strong> {w.noteText}</p><button onClick={() => setRulesOpen(true)}>{w.more} <ArrowUpRight size={13} /></button></div>
       <footer className="wk-footer"><span>© 2026 LIVKAMARKET</span><div><span className="wk-online-dot" />{w.footerTagline}</div><a href="https://t.me/livkamarket" target="_blank" rel="noreferrer"><Send size={13} />{w.inTelegram}</a></footer>

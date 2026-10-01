@@ -492,3 +492,97 @@
   .wk-token-bank-top strong { font-size:20px; }
   .wk-token-bank { padding:14px; }
 }
+
+/* ═══════════ API KEY PANEL & RESPONSIVE STYLES ═══════════ */
+.wk-key-panel { display:flex; flex-direction:column; gap:20px; width:100%; }
+.wk-key-hero { background:radial-gradient(ellipse at 80% 0%,#7c3aed22,transparent 65%),linear-gradient(135deg,#171324,#110e19); border:1px solid #33284d; border-radius:18px; padding:24px 26px; }
+.wk-key-tags { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+.wk-key-badge { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:4px 10px; border-radius:6px; }
+.wk-key-badge.active { background:#10b98115; border:1px solid #10b98140; color:#34d399; }
+.wk-key-badge.model { background:#a855f715; border:1px solid #a855f740; color:#c084fc; }
+.wk-key-badge.protocol { background:#38bdf815; border:1px solid #38bdf840; color:#38bdf8; }
+.wk-key-dot { width:6px; height:6px; border-radius:50%; background:currentColor; box-shadow:0 0 6px currentColor; }
+.wk-key-hero h2 { font-size:24px; font-weight:700; color:#f8fafc; margin-bottom:6px; letter-spacing:-.4px; }
+.wk-key-hero p { font-size:13px; color:#94a3b8; max-width:650px; line-height:1.6; }
+
+.wk-key-box-card { background:radial-gradient(circle at 100% 0%,#4338ca15,transparent 50%),#14101e; border:1px solid #342a4c; border-radius:18px; padding:22px 24px; box-shadow:0 8px 30px rgba(0,0,0,.35); }
+.wk-key-box-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+.wk-key-box-label { display:inline-flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#c4b5fd; }
+.wk-key-box-actions { display:flex; align-items:center; gap:8px; }
+.wk-btn-pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#cbd5e1; background:#1e182c; border:1px solid #3d3156; padding:7px 14px; border-radius:8px; cursor:pointer; transition:all .2s; }
+.wk-btn-pill:hover { background:#2a213e; border-color:#6366f1; color:#fff; }
+.wk-btn-pill.is-copied { background:#10b98120; border-color:#10b981; color:#34d399; }
+
+.wk-key-input-container { margin-top:14px; background:#090710; border:1px solid #2e2445; border-radius:12px; padding:16px 18px; overflow-x:auto; }
+.wk-key-string { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:14px; color:#e2e8f0; letter-spacing:.5px; font-weight:500; word-break:break-all; }
+.wk-key-security-note { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:11px; color:#78716c; }
+.wk-key-security-note svg { flex:none; color:#a855f7; }
+
+.wk-key-meta-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+.wk-meta-card { background:#130f1c; border:1px solid #2c223f; border-radius:16px; padding:20px; display:flex; flex-direction:column; }
+.wk-meta-head { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; color:#f1f5f9; margin-bottom:14px; }
+.wk-param-rows { display:flex; flex-direction:column; gap:10px; }
+.wk-param-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; background:#0a0812; border:1px solid #211931; border-radius:10px; }
+.wk-param-row small { display:block; font-size:10px; color:#71717a; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px; }
+.wk-param-row code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:12px; color:#ddd6fe; word-break:break-all; }
+.wk-icon-copy-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; flex:none; border-radius:7px; background:#171224; border:1px solid #2f2546; color:#a1a1aa; cursor:pointer; transition:all .15s; }
+.wk-icon-copy-btn:hover { background:#251d38; color:#fff; border-color:#818cf8; }
+
+.wk-balance-showcase { display:flex; flex-direction:column; gap:12px; height:100%; justify-content:space-between; }
+.wk-balance-val span { display:block; font-size:11px; color:#a1a1aa; text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.wk-balance-val strong { font-size:28px; font-weight:700; color:#fbbf24; font-variant-numeric:tabular-nums; letter-spacing:-.5px; }
+.wk-balance-sub { font-size:11px; color:#71717a; line-height:1.5; margin:0; }
+
+.wk-telegram-card { background:radial-gradient(circle at 100% 0%,#0284c718,transparent 50%),#130f1c; border-color:#1e3a5f; }
+.wk-tg-content { display:flex; flex-direction:column; gap:12px; height:100%; justify-content:space-between; }
+.wk-tg-status { display:flex; align-items:center; gap:9px; font-size:12px; font-weight:600; color:#e2e8f0; }
+.wk-status-pill { font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; }
+.wk-status-pill.linked { background:#10b98120; color:#34d399; border:1px solid #10b98144; }
+.wk-status-pill.unlinked { background:#f59e0b20; color:#fbbf24; border:1px solid #f59e0b44; }
+.wk-tg-desc { font-size:11px; color:#94a3b8; line-height:1.5; margin:0; }
+.wk-tg-btn { border-color:#0284c760!important; color:#38bdf8!important; }
+.wk-tg-btn:hover { background:#0369a130!important; border-color:#38bdf8!important; }
+.wk-tg-alert { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:8px; font-size:11px; font-weight:500; }
+.wk-tg-alert.is-ok { background:#10b98115; border:1px solid #10b98140; color:#34d399; }
+.wk-tg-alert.is-err { background:#ef444415; border:1px solid #ef444440; color:#f87171; }
+
+.wk-code-guides { background:#130f1c; border:1px solid #2c223f; border-radius:18px; padding:22px 24px; }
+.wk-guides-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.wk-guides-title { display:flex; align-items:center; gap:9px; font-size:15px; font-weight:600; color:#f1f5f9; }
+.wk-guide-tabs { display:flex; gap:6px; flex-wrap:wrap; }
+.wk-tab-btn { font-size:11.5px; font-weight:600; color:#94a3b8; background:#0a0812; border:1px solid #231b33; padding:7px 12px; border-radius:8px; cursor:pointer; transition:all .15s; }
+.wk-tab-btn:hover { color:#fff; border-color:#4f46e5; }
+.wk-tab-btn.is-active { background:#4f46e5; border-color:#6366f1; color:#fff; box-shadow:0 4px 14px #4f46e540; }
+.wk-code-container { background:#08060d; border:1px solid #241c35; border-radius:12px; overflow:hidden; }
+.wk-code-toolbar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#110d1a; border-bottom:1px solid #211931; }
+.wk-code-lang { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:#a1a1aa; text-transform:uppercase; letter-spacing:.5px; }
+.wk-btn-copy-code { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; color:#cbd5e1; background:#1a1426; border:1px solid #33274c; padding:5px 10px; border-radius:6px; cursor:pointer; transition:all .15s; }
+.wk-btn-copy-code:hover { background:#281f3b; color:#fff; }
+.wk-code-content { padding:16px 18px; margin:0; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:12.5px; line-height:1.65; color:#cbd5e1; overflow-x:auto; }
+
+/* Responsive layout adjustments for tablets and phones */
+@media(max-width:760px) {
+  .wk-key-hero { padding:18px 20px; }
+  .wk-key-hero h2 { font-size:20px; }
+  .wk-key-box-card { padding:18px 20px; }
+  .wk-key-meta-grid { grid-template-columns:1fr; }
+  .wk-guides-head { flex-direction:column; align-items:stretch; }
+  .wk-guide-tabs { overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px; }
+}
+
+@media(max-width:560px) {
+  .wk-key-panel { gap:14px; }
+  .wk-key-hero { padding:16px; border-radius:14px; }
+  .wk-key-hero h2 { font-size:18px; }
+  .wk-key-hero p { font-size:11px; }
+  .wk-key-box-card { padding:16px; border-radius:14px; }
+  .wk-key-box-header { flex-direction:column; align-items:stretch; gap:10px; }
+  .wk-key-box-actions { justify-content:flex-end; }
+  .wk-key-input-container { padding:12px; font-size:12px; }
+  .wk-key-string { font-size:12px; }
+  .wk-meta-card { padding:16px; border-radius:14px; }
+  .wk-balance-val strong { font-size:24px; }
+  .wk-code-guides { padding:16px; border-radius:14px; }
+  .wk-code-content { font-size:11px; padding:12px; }
+}
+

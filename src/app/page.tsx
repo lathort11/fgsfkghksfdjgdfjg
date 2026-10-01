@@ -25,6 +25,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     user ? walletSnapshot(user.id) : Promise.resolve(null),
     tokenSnapshot(user?.id ?? null),
   ]);
-  const section: WalletSection = ["catalog", "purchases", "history"].includes(params.section ?? "") ? params.section as WalletSection : "wallet";
+  const section: WalletSection = ["catalog", "purchases", "history", "key"].includes(params.section ?? "") ? params.section as WalletSection : "wallet";
   return <LangProvider initial={locale}><WalletDashboard products={products} initialUser={user} initialWallet={wallet} initialTokens={tokenData} initialSection={section} /></LangProvider>;
 }
