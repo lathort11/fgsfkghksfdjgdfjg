@@ -56,6 +56,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
   const owned = model ? balanceOf(data, model.slug) : null;
   const personalAvailable = Math.max(0, data.cap - (owned?.inputTokens ?? 0) - (owned?.outputTokens ?? 0));
   const bankAvailable = data.bankAvailableTokens ?? 0;
+  const stockAvailable = Math.min(bankAvailable, personalAvailable);
   const currentTier = getTierForTokens(amountTokens);
   const effectiveRate = (data.discount && data.discount.isActive) ? data.discount.discountPriceCents : currentTier.ratePerMillionCents;
   const affordable = affordableTokens(data.balanceCents, stockAvailable, (data.discount && data.discount.isActive) ? data.discount.discountPriceCents : undefined);
