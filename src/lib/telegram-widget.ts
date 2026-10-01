@@ -13,7 +13,7 @@ const DEFAULT_BOT = "LivkaMarketbot";
 
 /** Runtime bot username (no rebuild needed to switch to a test bot). */
 export function telegramBotUsername(): string {
-  const raw = (process.env.TELEGRAM_BOT_USERNAME || process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || DEFAULT_BOT)
+  const raw = (process.env.TELEGRAM_BOT_USERNAME || process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || process.env.BOT_USERNAME || DEFAULT_BOT)
     .trim()
     .replace(/^@/, "");
   return /^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(raw) ? raw : DEFAULT_BOT;

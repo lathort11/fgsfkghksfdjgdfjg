@@ -9,7 +9,8 @@ import {
 import { ensure, idempotency } from "@/lib/wallet-security";
 import {
   MILLION, TOKEN_BALANCE_CAP, TOKEN_BANK_INITIAL, TOKEN_MIN_PURCHASE,
-  TOKEN_PRICE_PER_MILLION_CENTS, TOKEN_PRODUCT_SLUG, tokenCostCents, type TokenSnapshot,
+  TOKEN_PRICE_PER_MILLION_CENTS, TOKEN_PRODUCT_SLUG, TOKEN_TIERS, tokenCostCents,
+  getRateForTokens, type TokenSnapshot,
 } from "@/lib/tokens-shared";
 import { getActiveTokenDiscount } from "@/lib/discounts";
 
@@ -77,6 +78,7 @@ export async function tokenSnapshot(userId: string | null): Promise<TokenSnapsho
     bankAvailableTokens: bank?.availableTokens ?? null,
     pricePerMillionCents: effectivePrice,
     discount: activeDiscount && activeDiscount.isActive ? activeDiscount : null,
+    tiers: TOKEN_TIERS,
   };
   if (!userId) return { ...common, apiKey: null, balances: [], balanceCents: 0 };
   const bySlug = new Map(models.map((m) => [m.id, m.slug]));
@@ -151,9 +153,10 @@ export async function purchaseTokens(userId: string, body: Record<string, unknow
     ensure(model?.productId === product.id, "MODEL_NOT_FOUND", 404);
     ensure(model.isActive, "MODEL_DISABLED", 409);
 
-    const baseRate = model.outputPerMillionCents || TOKEN_PRICE_PER_MILLION_CENTS;
     const activeDiscount = await getActiveTokenDiscount();
-    const rate = (activeDiscount && activeDiscount.isActive) ? activeDiscount.discountPriceCents : baseRate;
+    const rate = (activeDiscount && activeDiscount.isActive)
+      ? activeDiscount.discountPriceCents
+      : getRateForTokens(amountTokens);
     const cost = Math.ceil((amountTokens * rate) / MILLION);
     ensure(cost === expected, "PRICE_CHANGED", 409);
     ensure(wallet.balanceCents >= cost, "INSUFFICIENT_BALANCE", 409);

@@ -20,7 +20,7 @@ export const GATEWAY_PATHS = {
 } as const;
 
 function gatewayBase(): string | null {
-  const raw = (process.env.BOT_GATEWAY_URL ?? "").trim().replace(/\/+$/, "");
+  const raw = (process.env.BOT_GATEWAY_URL ?? process.env.BOT_INTERNAL_URL ?? "").trim().replace(/\/+$/, "");
   if (!raw) return null;
   try {
     const u = new URL(raw);

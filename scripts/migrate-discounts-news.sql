@@ -33,7 +33,7 @@ VALUES (
   10,
   67,
   '🔥 Скидка в честь открытия',
-  true
+  false
 )
 ON CONFLICT (slug) DO NOTHING;
 

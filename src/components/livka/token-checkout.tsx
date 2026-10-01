@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   ArrowRight, Check, CheckCheck, Copy, Cpu, Download, Eye, EyeOff,
-  Gauge, Lock, ShieldCheck, Sparkles, Wallet,
+  Flame, Gauge, Lock, ShieldCheck, Sparkles, Wallet,
 } from "lucide-react";
 import { useW } from "@/components/livka/i18n-context";
 import { ProductTile } from "@/components/livka/product-art";
@@ -14,7 +14,7 @@ import { money } from "@/lib/wallet-shared";
 import {
   affordableTokens, balanceOf, emptyTokenSnapshot, formatBankTokens, formatTokens, MILLION,
   parseTokens, TOKEN_BANK_INITIAL, TOKEN_MIN_PURCHASE, TOKEN_PRESETS, TOKEN_STEP,
-  tokenCostCents, type TokenSnapshot,
+  TOKEN_TIERS, getTierForTokens, getRateForTokens, tokenCostCents, type TokenSnapshot,
 } from "@/lib/tokens-shared";
 
 type TokenProduct = { id: string; slug: string; icon: string; kind: string; accent: string };
@@ -56,12 +56,13 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
   const owned = model ? balanceOf(data, model.slug) : null;
   const personalAvailable = Math.max(0, data.cap - (owned?.inputTokens ?? 0) - (owned?.outputTokens ?? 0));
   const bankAvailable = data.bankAvailableTokens ?? 0;
-  const stockAvailable = Math.min(personalAvailable, bankAvailable);
-  const affordable = affordableTokens(data.balanceCents, stockAvailable, data.pricePerMillionCents);
+  const currentTier = getTierForTokens(amountTokens);
+  const effectiveRate = (data.discount && data.discount.isActive) ? data.discount.discountPriceCents : currentTier.ratePerMillionCents;
+  const affordable = affordableTokens(data.balanceCents, stockAvailable, (data.discount && data.discount.isActive) ? data.discount.discountPriceCents : undefined);
   const maxTokens = Math.min(stockAvailable, affordable);
   const canChoose = !!model?.isActive && stockAvailable >= TOKEN_MIN_PURCHASE && maxTokens >= TOKEN_MIN_PURCHASE;
   const validInput = text === null || (parseTokens(text) >= TOKEN_MIN_PURCHASE && parseTokens(text) <= maxTokens);
-  const cost = tokenCostCents(amountTokens, data.pricePerMillionCents);
+  const cost = tokenCostCents(amountTokens, effectiveRate);
   const missing = Math.max(0, cost - data.balanceCents);
   const remaining = formatBankTokens(data.bankAvailableTokens, locale);
 
@@ -161,48 +162,120 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
           </button>)}
         </div>
 
-        {data.discount?.isActive ? (
-          <div className="wk-token-promo-banner" style={{
-            background: "linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(245, 158, 11, 0.12))",
-            border: "1px solid rgba(245, 158, 11, 0.35)",
-            borderRadius: "14px",
-            padding: "12px 16px",
-            marginBottom: "16px",
+        <div className="wk-tier-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", margin: "14px 0 10px" }}>
+          {TOKEN_TIERS.map((tier) => {
+            const isCurrent = currentTier.id === tier.id;
+            return (
+              <button
+                key={tier.id}
+                type="button"
+                onClick={() => chooseAmount(tier.minTokens)}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  padding: "10px 6px",
+                  borderRadius: "12px",
+                  background: isCurrent ? "rgba(16, 185, 129, 0.12)" : "rgba(255, 255, 255, 0.03)",
+                  border: isCurrent ? "1.5px solid #10b981" : "1px solid rgba(255, 255, 255, 0.08)",
+                  cursor: "pointer",
+                  textAlign: "center",
+                  transition: "all 0.15s ease",
+                  position: "relative",
+                }}
+              >
+                {tier.badge && (
+                  <span style={{
+                    position: "absolute",
+                    top: "-8px",
+                    background: "#ef4444",
+                    color: "#fff",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                    padding: "1px 5px",
+                    borderRadius: "10px",
+                    whiteSpace: "nowrap",
+                  }}>
+                    -67%
+                  </span>
+                )}
+                {tier.isPopular && !tier.badge && (
+                  <span style={{
+                    position: "absolute",
+                    top: "-8px",
+                    background: "#3b82f6",
+                    color: "#fff",
+                    fontSize: "8.5px",
+                    fontWeight: 800,
+                    padding: "1px 5px",
+                    borderRadius: "10px",
+                    whiteSpace: "nowrap",
+                  }}>
+                    Хит
+                  </span>
+                )}
+                <span style={{ fontSize: "11px", fontWeight: 700, color: isCurrent ? "#10b981" : "#94a3b8" }}>
+                  {tier.label}
+                </span>
+                <span style={{ fontSize: "15px", fontWeight: 800, color: isCurrent ? "#10b981" : "#fff", margin: "2px 0" }}>
+                  ${(tier.ratePerMillionCents / 100).toFixed(2)}
+                </span>
+                <span style={{ fontSize: "10px", color: "var(--wk-muted, #64748b)" }}>
+                  / 1M токенов
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {amountTokens < 10 * MILLION ? (
+          <div style={{
+            fontSize: "12px",
+            color: "#60a5fa",
+            background: "rgba(59, 130, 246, 0.08)",
+            border: "1px solid rgba(59, 130, 246, 0.2)",
+            borderRadius: "10px",
+            padding: "8px 12px",
+            marginBottom: "14px",
             display: "flex",
-            flexDirection: "column",
+            alignItems: "center",
             gap: "6px",
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontWeight: 700, fontSize: "13px", color: "#f59e0b", display: "flex", alignItems: "center", gap: "6px" }}>
-                <Sparkles size={15} />
-                {data.discount.badge || "🔥 Скидка в честь открытия"}
-              </span>
-              <span style={{
-                background: "#ef4444",
-                color: "#fff",
-                fontWeight: 800,
-                fontSize: "11px",
-                padding: "2px 8px",
-                borderRadius: "20px",
-              }}>
-                -{data.discount.percentOff}%
-              </span>
-            </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-              <span style={{ textDecoration: "line-through", color: "var(--wk-muted, #94a3b8)", fontSize: "14px" }}>
-                {money(data.discount.originalPriceCents, true)}
-              </span>
-              <span style={{ color: "var(--wk-muted, #94a3b8)", fontSize: "13px" }}>→</span>
-              <span style={{ fontSize: "18px", fontWeight: 800, color: "#10b981" }}>
-                {money(data.pricePerMillionCents, true)}
-              </span>
-              <span style={{ fontSize: "12px", color: "var(--wk-muted, #94a3b8)" }}>
-                {copy.perMillionTokens(data.discount.reason)}
-              </span>
-            </div>
+            <Sparkles size={14} />
+            <span>Добавьте ещё {((10 * MILLION - amountTokens) / MILLION)}M токенов, чтобы цена снизилась до <b>$0.20</b> / 1M!</span>
+          </div>
+        ) : amountTokens < 50 * MILLION ? (
+          <div style={{
+            fontSize: "12px",
+            color: "#f59e0b",
+            background: "rgba(245, 158, 11, 0.08)",
+            border: "1px solid rgba(245, 158, 11, 0.2)",
+            borderRadius: "10px",
+            padding: "8px 12px",
+            marginBottom: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}>
+            <Flame size={14} />
+            <span>Добавьте ещё {((50 * MILLION - amountTokens) / MILLION)}M токенов, чтобы включить оптовую цену <b>$0.10</b> (-67%)!</span>
           </div>
         ) : (
-          <div className="wk-token-flat-rate"><Sparkles size={17} /><span>{copy.priceLine(money(data.pricePerMillionCents, true))}</span></div>
+          <div style={{
+            fontSize: "12px",
+            color: "#10b981",
+            background: "rgba(16, 185, 129, 0.08)",
+            border: "1px solid rgba(16, 185, 129, 0.2)",
+            borderRadius: "10px",
+            padding: "8px 12px",
+            marginBottom: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+          }}>
+            <Check size={14} />
+            <span>Включён максимальный оптовый тариф: <b>$0.10</b> / 1M токенов (скидка 67%)</span>
+          </div>
         )}
         <TokenField
           value={amountTokens}

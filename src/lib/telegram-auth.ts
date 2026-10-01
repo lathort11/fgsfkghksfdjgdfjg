@@ -44,7 +44,7 @@ export async function verifyLoginWidget(raw: unknown): Promise<Verified> {
   if (!data.id || !data.hash || !data.auth_date || !/^\d+$/.test(data.id)) return { ok: false, error: "BAD_PAYLOAD" };
   if (!fresh(Number(data.auth_date))) return { ok: false, error: "EXPIRED" };
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
   let valid: boolean | null;
   if (token) {
     const check = Object.keys(data)
@@ -84,7 +84,7 @@ export async function verifyWebAppInitData(initData: unknown): Promise<Verified>
   if (!hash || !userJson) return { ok: false, error: "BAD_PAYLOAD" };
   if (!fresh(authDate)) return { ok: false, error: "EXPIRED" };
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
   let valid: boolean | null;
   if (token) {
     const check = [...params.entries()]
