@@ -78,24 +78,24 @@ export function ApiKeyPanel({
         setTgFeedback({
           ok: true,
           msg: data.username
-            ? `Ключ успешно отправлен в Telegram (@${data.username})!`
+            ? ks.tgSentUser(data.username)
             : ks.tgSentSuccess,
         });
       } else {
         if (data.error === "TELEGRAM_NOT_LINKED") {
           setTgFeedback({
             ok: false,
-            msg: "Ваш Telegram не найден в базе бота. Напишите боту @LivkaMarketBot команду /start или авторизуйтесь на сайте через Telegram.",
+            msg: ks.tgNotLinkedDetail,
           });
         } else {
           setTgFeedback({
             ok: false,
-            msg: data.error ?? "Не удалось отправить сообщение. Попробуйте позже.",
+            msg: data.error ?? ks.tgSendError,
           });
         }
       }
     } catch {
-      setTgFeedback({ ok: false, msg: "Ошибка связи с сервером." });
+      setTgFeedback({ ok: false, msg: ks.networkError });
     } finally {
       setSendingTg(false);
     }
@@ -103,18 +103,18 @@ export function ApiKeyPanel({
 
   const codeSnippets = {
     cursor: `// Cursor / Windsurf / Cline / Continue Configuration:
-// 1. Откройте Settings -> Models
-// 2. Включите "Anthropic" override
-// 3. Укажите:
+${ks.snippetCursorComment1}
+${ks.snippetCursorComment2}
+${ks.snippetCursorComment3}
 Base URL:    https://api.livkamarket.app
 API Key:     ${apiKey}
 Model:       ${modelId}`,
 
-    claudeCode: `# Claude Code CLI (Терминал / Bash / Zsh):
+    claudeCode: `${ks.snippetClaudeCodeComment}
 export ANTHROPIC_BASE_URL="https://api.livkamarket.app"
 export ANTHROPIC_API_KEY="${apiKey}"
 
-# Запустите Claude Code:
+${ks.snippetClaudeCodeRun}
 claude`,
 
     python: `import anthropic
@@ -128,7 +128,7 @@ message = client.messages.create(
     model="${modelId}",
     max_tokens=1024,
     messages=[
-        {"role": "user", "content": "Привет! Напиши краткую справку по архитектуре REST API."}
+        {"role": "user", "content": "${ks.snippetPythonPrompt}"}
     ],
 )
 print(message.content[0].text)`,
@@ -143,8 +143,8 @@ const anthropic = new Anthropic({
 async function main() {
   const message = await anthropic.messages.create({
     model: "${modelId}",
-    max_tokens: 1024,
-    messages: [{ role: "user", content: "Привет! Напиши функцию генерации UUID на TypeScript." }],
+    max_tokens=1024,
+    messages: [{ role: "user", content: "${ks.snippetNodePrompt}" }],
   });
   console.log(message.content);
 }
@@ -159,7 +159,7 @@ main();`,
     "model": "${modelId}",
     "max_tokens": 1024,
     "messages": [
-      {"role": "user", "content": "Привет, Claude!"}
+      {"role": "user", "content": "${ks.snippetPythonPrompt}"}
     ]
   }'`,
   };
@@ -222,7 +222,7 @@ main();`,
         </div>
         <div className="wk-key-security-note">
           <ShieldCheck size={14} />
-          <span>Ключ привязан к вашему аккаунту и действует бессрочно при наличии токенов. Не передавайте его третьим лицам.</span>
+          <span>{ks.keySecurityNote}</span>
         </div>
       </section>
 
@@ -244,7 +244,7 @@ main();`,
                 type="button"
                 className="wk-icon-copy-btn"
                 onClick={() => copyToClipboard(baseUrl, "baseUrl")}
-                title="Скопировать Base URL"
+                title={ks.copyBaseUrl}
               >
                 {copiedField === "baseUrl" ? <Check size={14} /> : <Copy size={14} />}
               </button>
@@ -259,7 +259,7 @@ main();`,
                 type="button"
                 className="wk-icon-copy-btn"
                 onClick={() => copyToClipboard(messagesUrl, "endpoint")}
-                title="Скопировать Endpoint"
+                title={ks.copyEndpoint}
               >
                 {copiedField === "endpoint" ? <Check size={14} /> : <Copy size={14} />}
               </button>
@@ -274,7 +274,7 @@ main();`,
                 type="button"
                 className="wk-icon-copy-btn"
                 onClick={() => copyToClipboard(modelId, "model")}
-                title="Скопировать Model ID"
+                title={ks.copyModelId}
               >
                 {copiedField === "model" ? <Check size={14} /> : <Copy size={14} />}
               </button>
@@ -296,11 +296,11 @@ main();`,
             {tokens.bankAvailableTokens != null && (
               <div style={{ fontSize: "11px", color: "#3bbd7a", display: "flex", alignItems: "center", gap: "6px", margin: "4px 0 8px" }}>
                 <span className="wk-claude-stock-dot" />
-                <span>Свободно для покупки: <b>{formatTokens(tokens.bankAvailableTokens, intl)}</b></span>
+                <span>{ks.availableForPurchase(formatTokens(tokens.bankAvailableTokens, intl))}</span>
               </div>
             )}
             <p className="wk-balance-sub">
-              Расход списывается строго по факту генерации (входные и выходные токены).
+              {ks.debitExplanation}
             </p>
             <button type="button" className="wk-button wk-primary wk-full" onClick={onBuyTokens}>
               <Flame size={16} /> {ks.buyMore} <ArrowRight size={16} />
@@ -317,7 +317,7 @@ main();`,
           <div className="wk-tg-content">
             <div className="wk-tg-status">
               <span className={`wk-status-pill ${user?.telegramId ? "linked" : "unlinked"}`}>
-                {user?.telegramId ? "● Привязан" : "○ Не привязан"}
+                {user?.telegramId ? ks.statusLinked : ks.statusUnlinked}
               </span>
               <p>
                 {user?.telegramId
@@ -406,7 +406,7 @@ main();`,
               onClick={() => copyToClipboard(codeSnippets[activeTab], activeTab)}
             >
               {copiedField === activeTab ? <Check size={14} /> : <Copy size={14} />}
-              <span>{copiedField === activeTab ? ks.copied : "Скопировать код"}</span>
+              <span>{copiedField === activeTab ? ks.copied : ks.copyCode}</span>
             </button>
           </div>
           <pre className="wk-code-content">

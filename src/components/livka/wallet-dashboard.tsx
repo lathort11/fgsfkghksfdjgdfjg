@@ -121,14 +121,14 @@ export default function WalletDashboard({ products, initialUser, initialWallet, 
         {hasApiKey && (
           <button className={`wk-nav-item wk-nav-key ${section === "key" ? "active" : ""}`} onClick={() => navigate("key")}>
             <KeyRound size={19} />
-            <span>{w.navKey ?? "Ключ"}</span>
+            <span>{w.navKey}</span>
             <span className="wk-new" style={{ background: "#7c3aed" }}>API</span>
           </button>
         )}
         <button className={`wk-nav-item ${section === "purchases" ? "active" : ""}`} onClick={() => navigate("purchases")}><ShoppingBag size={19} /><span>{w.navPurchases}</span></button>
         <button className={`wk-nav-item ${section === "history" ? "active" : ""}`} onClick={() => navigate("history")}><ArrowLeftRight size={19} /><span>{w.navHistory}</span></button>
         <button className="wk-nav-item" onClick={() => { if (user) { setProfileOpen(true); setMobileNav(false); } else askAuth("profile"); }}><Settings2 size={19} /><span>{w.navSettings}</span></button>
-        <button className="wk-nav-item" onClick={() => { setNewsOpen(true); setMobileNav(false); }}><Sparkles size={19} /><span>Новости и акции</span><span className="wk-new" style={{ background: "#f59e0b" }}>АКЦИЯ</span></button>
+        <button className="wk-nav-item" onClick={() => { setNewsOpen(true); setMobileNav(false); }}><Sparkles size={19} /><span>{w.newsNav}</span><span className="wk-new" style={{ background: "#f59e0b" }}>{w.newsBadge}</span></button>
         {user?.role === "admin" && <a className="wk-nav-item wk-admin-link" href="/admin"><ShieldCheck size={19} /><span>LIVKA CONTROL</span><ArrowUpRight size={14} /></a>}
       </div>
       <div className="wk-sidebar-bottom"><div className="wk-help-card"><span className="wk-help-icon"><Headphones size={21} /></span><h3>{w.helpTitle}</h3><p>{w.helpText}</p><a href="https://t.me/livkamarket" target="_blank" rel="noreferrer">{w.helpBtn} <ArrowUpRight size={15} /></a></div>

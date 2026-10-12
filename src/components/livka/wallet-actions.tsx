@@ -38,7 +38,7 @@ export function AssetSelect({ value, onChange, id = "deposit-asset" }: { value: 
           <option value="BNB">BNB · Binance Coin (Crypto Bot)</option>
           <option value="TRX">TRX · TRON (Crypto Bot)</option>
           <option value="USDC">USDC · USD Coin (Crypto Bot)</option>
-          <option value="Crypto Bot">Crypto Bot · Любая валюта / Any crypto</option>
+          <option value="Crypto Bot">{w.anyCrypto}</option>
         </select>
         <span className="wk-select-tag">{getBadgeTag(value)}</span>
       </div>

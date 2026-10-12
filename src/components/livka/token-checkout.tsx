@@ -37,7 +37,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<PurchaseResult | null>(null);
   const [revealed, setRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied , setCopied] = useState(false);
   const key = useRequestKey();
 
   useEffect(() => {
@@ -166,6 +166,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
         <div className="wk-tier-cards" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", margin: "14px 0 10px" }}>
           {TOKEN_TIERS.map((tier) => {
             const isCurrent = currentTier.id === tier.id;
+            const tierLabel = tier.id === "retail" ? w.tokens.tierRetailLabel : tier.id === "standard" ? w.tokens.tierStandardLabel : w.tokens.tierWholesaleLabel;
             return (
               <button
                 key={tier.id}
@@ -212,17 +213,17 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
                     borderRadius: "10px",
                     whiteSpace: "nowrap",
                   }}>
-                    Хит
+                    {w.tokens.tierHit}
                   </span>
                 )}
                 <span style={{ fontSize: "11px", fontWeight: 700, color: isCurrent ? "#10b981" : "#94a3b8" }}>
-                  {tier.label}
+                  {tierLabel}
                 </span>
                 <span style={{ fontSize: "15px", fontWeight: 800, color: isCurrent ? "#10b981" : "#fff", margin: "2px 0" }}>
                   ${(tier.ratePerMillionCents / 100).toFixed(2)}
                 </span>
                 <span style={{ fontSize: "10px", color: "var(--wk-muted, #64748b)" }}>
-                  / 1M токенов
+                  {w.tokens.perMillionTokens()}
                 </span>
               </button>
             );
@@ -243,7 +244,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
             gap: "6px",
           }}>
             <Sparkles size={14} />
-            <span>Добавьте ещё {((10 * MILLION - amountTokens) / MILLION)}M токенов, чтобы цена снизилась до <b>$0.20</b> / 1M!</span>
+            <span>{w.tokens.upsellToStandard((10 * MILLION - amountTokens) / MILLION)}</span>
           </div>
         ) : amountTokens < 50 * MILLION ? (
           <div style={{
@@ -259,7 +260,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
             gap: "6px",
           }}>
             <Flame size={14} />
-            <span>Добавьте ещё {((50 * MILLION - amountTokens) / MILLION)}M токенов, чтобы включить оптовую цену <b>$0.10</b> (-67%)!</span>
+            <span>{w.tokens.upsellToWholesale((50 * MILLION - amountTokens) / MILLION)}</span>
           </div>
         ) : (
           <div style={{
@@ -275,7 +276,7 @@ export function TokenCheckout({ product, onClose, onOpenOrders, onTopUp, onPurch
             gap: "6px",
           }}>
             <Check size={14} />
-            <span>Включён максимальный оптовый тариф: <b>$0.10</b> / 1M токенов (скидка 67%)</span>
+            <span>{w.tokens.upsellMaxWholesale}</span>
           </div>
         )}
         <TokenField

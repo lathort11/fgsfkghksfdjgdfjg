@@ -34,6 +34,11 @@ services:
       - "3000"
     networks: [livka]
     mem_limit: 256m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   site-migrate:
     build:
@@ -47,6 +52,11 @@ services:
     networks: [livka]
     profiles: [tools]
     restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
 networks:
   livka:

@@ -25,8 +25,8 @@ export type TokenTier = {
 export const TOKEN_TIERS: TokenTier[] = [
   {
     id: "retail",
-    label: "Старт",
-    name: "Розница",
+    label: "Start",
+    name: "Retail",
     minTokens: 5 * MILLION,
     maxTokens: 10 * MILLION,
     ratePerMillionCents: 30, // $0.30 / 1M
@@ -34,7 +34,7 @@ export const TOKEN_TIERS: TokenTier[] = [
   },
   {
     id: "standard",
-    label: "Стандарт",
+    label: "Standard",
     name: "Dev",
     minTokens: 10 * MILLION,
     maxTokens: 50 * MILLION,
@@ -44,13 +44,13 @@ export const TOKEN_TIERS: TokenTier[] = [
   },
   {
     id: "wholesale",
-    label: "Опт / Pro",
-    name: "Опт",
+    label: "Bulk / Pro",
+    name: "Bulk",
     minTokens: 50 * MILLION,
     maxTokens: null,
     ratePerMillionCents: 10, // $0.10 / 1M
     discountPercent: 67,
-    badge: "🔥 Выгода 67%",
+    badge: "🔥 67% OFF",
   },
 ];
 
