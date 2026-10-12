@@ -177,33 +177,3 @@
 .ad-upstream-sync-btn:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:800px){.ad-upstream-stats-grid{grid-template-columns:repeat(2,1fr)}}
 
-/* OmniRoute AI Gateway Panel */
-.ad-omniroute-wrapper{display:flex;flex-direction:column;gap:16px;width:100%}
-.ad-omniroute-wrapper.fullscreen{position:fixed;inset:0;z-index:9999;background:#0d0a14;padding:16px;overflow:hidden}
-.ad-omniroute-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 20px}
-.ad-omniroute-info{display:flex;align-items:center;gap:14px}
-.ad-omniroute-icon{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#3c2069,#6b3cb8);display:flex;align-items:center;justify-content:center;color:#f0e6ff;box-shadow:0 4px 14px rgba(107,60,184,.3)}
-.ad-omniroute-title-row{display:flex;align-items:center;gap:12px;margin-bottom:3px}
-.ad-omniroute-title-row h2{font-size:16px;font-weight:700;color:#fff;margin:0}
-.ad-omniroute-subtitle{font-size:11px;color:#9486a8;margin:0}
-.ad-omniroute-actions{display:flex;align-items:center;gap:10px}
-.ad-btn-primary{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#7b3fe4,#9c62f2);color:#fff;font-size:12px;font-weight:600;padding:8px 14px;border-radius:8px;border:none;cursor:pointer;text-decoration:none;transition:.15s;box-shadow:0 2px 8px rgba(123,63,228,.35)}
-.ad-btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
-.ad-btn-secondary{display:inline-flex;align-items:center;gap:6px;background:#1e172a;color:#c8b7e2;font-size:12px;font-weight:600;padding:8px 12px;border-radius:8px;border:1px solid #43335b;cursor:pointer;transition:.15s}
-.ad-btn-secondary:hover{background:#2a203b;color:#fff;border-color:#5c457d}
-.ad-dot-pulse{width:6px;height:6px;border-radius:50%;background:#38d39f;display:inline-block;animation:pulseDot 1.6s infinite ease-in-out;margin-right:4px}
-@keyframes pulseDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
-
-.ad-omniroute-banner{display:flex;flex-direction:column;gap:8px;background:#15101f;border:1px solid #372a4d;border-radius:10px;padding:12px 16px}
-.ad-omniroute-banner-item{display:flex;align-items:center;gap:10px;font-size:11.5px;color:#a89bbd}
-.ad-omniroute-banner-item b{color:#eee5f8}
-.text-emerald{color:#38d39f}
-.text-amber{color:#f59e0b}
-
-.ad-omniroute-frame-container{position:relative;background:#0d0a14;border:1px solid #372a4d;border-radius:12px;overflow:hidden;min-height:750px;height:calc(100vh - 270px);display:flex;flex-direction:column}
-.ad-omniroute-wrapper.fullscreen .ad-omniroute-frame-container{height:calc(100vh - 120px);min-height:unset}
-.ad-omniroute-iframe{width:100%;height:100%;flex:1;border:none;background:#0b0f1a}
-.ad-omniroute-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#0e0b17;color:#cbb8e4;z-index:2}
-.ad-omniroute-loading b{font-size:14px;color:#f0e9f8}
-.ad-omniroute-loading span{font-size:11px;color:#807394}
-
